@@ -4,6 +4,7 @@ window.WebChat = window.WebChat || {};
 window.WebChat.Channel = (function() {
     var eventBus;
     var userID;
+    var roomID;
 
     /**
      * Main entry point
@@ -19,7 +20,7 @@ window.WebChat.Channel = (function() {
         };
 
         userID = params.userID;
-
+        roomID = 'bfae8b5c-d4cb-4c4f-b71f-a165c60bd684'; /* TODO: develop the rooms concept, const magic will do for now */
         $('#user').keyup(function (event) {
             if (event.keyCode == 13 || event.which == 13) {
                 var txt = $('#user').val();
@@ -27,6 +28,7 @@ window.WebChat.Channel = (function() {
 
                     eventBus.publish("webchat.server", JSON.stringify({
                         userID: userID,
+                        roomID: roomID,
                         text: txt
                     }));
 
