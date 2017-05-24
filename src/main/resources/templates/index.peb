@@ -16,7 +16,7 @@
 .wraptocenter * {
   vertical-align: middle;
   width: 100%;
-  max-width: 500px;
+  max-width: 360px;
 }
 </style>
 {% endblock %}

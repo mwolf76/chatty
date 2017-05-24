@@ -29,7 +29,7 @@ $(document).ready(function() {
     </ul>
 </div>
 <div class="container">
-    <textarea id="room" class="form-control" rows="40" readonly></textarea>
+    <textarea id="room" class="form-control" rows="25" readonly></textarea>
     <br/>
     <textarea id="user" class="form-control"></textarea>
 </div>
