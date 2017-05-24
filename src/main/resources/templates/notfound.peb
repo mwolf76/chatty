@@ -1,0 +1,3 @@
+{% extends "error.peb" %}
+{% block error %}Not Found{% endblock %}
+{% block message %}The URL you entered does not lead to any known resource. Please check your URL and retry.{% endblock %}

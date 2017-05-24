@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module org.jetbrains.idea.maven.project.MavenProjectsManager.isMavenModule="true" type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_1_8" inherit-compiler-output="false">
+    <output url="file://$MODULE_DIR$/target/classes" />
+    <output-test url="file://$MODULE_DIR$/target/test-classes" />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src/main/java" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/main/resources" type="java-resource" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" scope="TEST" name="Maven: junit:junit:4.12" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.hamcrest:hamcrest-core:1.3" level="project" />
+    <orderEntry type="library" name="Maven: org.slf4j:slf4j-api:1.6.4" level="project" />
+    <orderEntry type="library" name="Maven: ch.qos.logback:logback-classic:1.0.1" level="project" />
+    <orderEntry type="library" name="Maven: ch.qos.logback:logback-core:1.0.1" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: io.vertx:vertx-unit:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-core:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-common:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-buffer:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-transport:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-handler:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-codec:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-handler-proxy:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-codec-socks:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-codec-http:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-codec-http2:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-resolver:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-resolver-dns:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: io.netty:netty-codec-dns:4.1.8.Final" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-core:2.7.4" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.7.4" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.7.0" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-config:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-web:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-web-templ-pebble:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: com.mitchellbosecke:pebble:2.3.0" level="project" />
+    <orderEntry type="library" name="Maven: com.google.guava:guava:16.0.1" level="project" />
+    <orderEntry type="library" name="Maven: com.coverity.security:coverity-escapers:1.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-auth-common:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-auth-oauth2:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-jwt:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: de.braintags:vertx-pojo-mapper-common:1.3.1" level="project" />
+    <orderEntry type="library" name="Maven: de.braintags:vertx-util:1.3.1" level="project" />
+    <orderEntry type="module-library">
+      <library name="Maven: sun.jdk:rt.jar:1.8">
+        <CLASSES>
+          <root url="jar:///opt/oracle/jdk1.8.0_77-x64/jre/lib/rt.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
+    <orderEntry type="library" name="Maven: de.braintags:vertx-key-generator:1.3.1" level="project" />
+    <orderEntry type="library" name="Maven: de.braintags:vertx-util:tests:1.3.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-mongo-client:3.2.1" level="project" />
+    <orderEntry type="library" name="Maven: org.mongodb:mongodb-driver-async:3.2.0" level="project" />
+    <orderEntry type="library" name="Maven: org.mongodb:bson:3.2.0" level="project" />
+    <orderEntry type="library" name="Maven: org.mongodb:mongodb-driver-core:3.2.0" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-mongo-service:3.2.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-service-factory:3.2.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-service-proxy:3.2.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-lang-js:3.2.1" level="project" />
+    <orderEntry type="library" name="Maven: de.braintags:vertx-key-generator:tests:1.3.1" level="project" />
+    <orderEntry type="library" name="Maven: log4j:log4j:1.2.17" level="project" />
+    <orderEntry type="library" name="Maven: de.braintags:vertx-pojongo:1.3.1" level="project" />
+    <orderEntry type="library" name="Maven: de.braintags:vertx-pojo-mapper-json:1.3.1" level="project" />
+    <orderEntry type="library" name="Maven: de.braintags:vertx-pojo-mapper-common-test:1.3.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-mongo-embedded-db:3.2.1" level="project" />
+    <orderEntry type="library" name="Maven: de.flapdoodle.embed:de.flapdoodle.embed.mongo:1.48.2" level="project" />
+    <orderEntry type="library" name="Maven: de.flapdoodle.embed:de.flapdoodle.embed.process:1.41.1" level="project" />
+    <orderEntry type="library" name="Maven: commons-io:commons-io:2.4" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.commons:commons-lang3:3.1" level="project" />
+    <orderEntry type="library" name="Maven: net.java.dev.jna:jna:4.0.0" level="project" />
+    <orderEntry type="library" name="Maven: net.java.dev.jna:jna-platform:4.0.0" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.commons:commons-compress:1.3" level="project" />
+  </component>
+</module>

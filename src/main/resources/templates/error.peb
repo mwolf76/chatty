@@ -1,0 +1,24 @@
+{% extends "base.peb" %}
+{% block title %}{% block error %}{% endblock %}{% endblock %}
+
+{% block pagestyle %}
+<style src="text/css">
+  body {
+    text-align: center;
+  }
+</style>
+{% endblock %}
+
+{% block pagejs %}
+{% endblock %}
+
+{% block content %}
+<h1>{%block error %}{% endblock %}</h1>
+<br/>
+<p>{%block message %}{% endblock %}</p>
+<br/>
+<br/>
+<a href="/protected/main">Back to site</a>
+<br/>
+<br/>
+{% endblock %}

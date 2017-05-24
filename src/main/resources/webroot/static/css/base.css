@@ -1,0 +1,39 @@
+<style type="text/css">
+    .ul {
+      padding: 12px;
+      font-size: 1.4em;
+    }
+
+    #logo {
+       background-image: url("/static/img/black-cat.svg");
+       height: 70px;
+       width: 70px;
+       background-repeat: no-repeat;
+       display: inline-block;
+    }
+
+    #main {
+      margin-left: 8px;
+    }
+
+    #signature {
+      display: inline;
+    }
+
+    #footer-text {
+      display: inline;
+      position: relative;
+      top: -17px;
+      font-family: 'Allerta Stencil';
+      font-size: 14px;
+    }
+
+    #footer-leave {
+          display: inline;
+          position: relative;
+          top: -17px;
+        }
+    #logout {
+      display: inline;
+    }
+</style>

@@ -1,0 +1,38 @@
+{% extends "base.peb" %}
+{% block title %}Chatty - Instant Messaging for work & leisure{% endblock %}
+
+{% block pagestyle %}
+<link rel="stylesheet" href="/static/css/main.css">
+{% endblock %}
+
+{% block pagejs %}
+<script src="https://code.jquery.com/jquery-1.11.2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/sockjs/0.3.4/sockjs.min.js"></script>
+<script src="/static/js/vertx-eventbus.js"></script>
+<script src="/static/js/main.js"></script>
+<script>
+/* setting up */
+$(document).ready(function() {
+  WebChat.Channel.init({
+    'userID': '{{ context.get("userID") }}'
+  });
+});
+
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <ul class="list-group">
+    <li class="list-group-item"><a href="{{ fragment.getLeft() }}"><span class="glyphicon glyphicon-globe nav-icon"></span></a>
+            <div class="topleft"><span>logged as<br><a href="{{ fragment.getLeft() }}"><strong>{{ context.get("userEmail") }}</strong></a></string></span></div></li>
+    </ul>
+</div>
+<div class="container">
+    <textarea id="room" class="form-control" rows="40" readonly></textarea>
+    <br/>
+    <textarea id="user" class="form-control"></textarea>
+</div>
+{% endblock %}
+
+{% block logout %}<div id="logout"><a href="/logout/"><span class="glyphicon glyphicon-log-out"></span></a></div>{% endblock %}

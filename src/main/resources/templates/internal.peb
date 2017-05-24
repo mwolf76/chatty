@@ -1,0 +1,3 @@
+{% extends "error.peb" %}
+{% block error %}Internal Server Error{% endblock %}
+{% block message %}This is probably due to a software bug :-/ Please report this error.{% endblock %}

@@ -1,0 +1,8 @@
+.idea
+.vertx
+out
+target
+conf/config.json
+chatty.log
+
+
