@@ -14,10 +14,11 @@
 /* setting up */
 $(document).ready(function() {
   WebChat.Channel.init({
-    'userID': '{{ context.get("userID") }}'
+    userID: '{{ context.get("userID") }}',
+    roomID: '{{ context.get("roomID") }}',
+    historyURL: '{{ context.get("historyURL") }}'
   });
 });
-
 </script>
 {% endblock %}
 

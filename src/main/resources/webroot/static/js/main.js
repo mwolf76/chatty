@@ -5,22 +5,33 @@ window.WebChat.Channel = (function() {
     var eventBus;
     var userID;
     var roomID;
+    var historyURL;
 
     /**
-     * Main entry point
+     * Channel initialization
      *
+     * @param {Object} params
      */
     var init = function(params) {
 
         eventBus = new EventBus("/eventbus/");
         eventBus.onopen = function () {
             eventBus.registerHandler("webchat.client", function (err, msg) {
-                $('#room').append(msg.body);
+
+                var messageRoomID = msg.body.roomID;
+                if (messageRoomID != roomID)
+                    return;
+
+                var $textarea = $('#room');
+                $textarea.append(msg.body.displayText);
+                $textarea.scrollTop($textarea[0].scrollHeight);
             });
         };
 
         userID = params.userID;
-        roomID = 'bfae8b5c-d4cb-4c4f-b71f-a165c60bd684'; /* TODO: develop the rooms concept, const magic will do for now */
+        roomID = params.roomID;
+        historyURL = params.historyURL;
+
         $('#user').keyup(function (event) {
             if (event.keyCode == 13 || event.which == 13) {
                 var txt = $('#user').val();
@@ -37,10 +48,23 @@ window.WebChat.Channel = (function() {
                 }
             }
         });
+
+        $.ajax({
+            type: 'GET',
+            url: historyURL
+        }).then(function (body) {
+            var $textarea = $('#room');
+            body.data.history.forEach(function(msg, index, array) {
+                $textarea.append(msg);
+            });
+            $textarea.scrollTop($textarea[0].scrollHeight);
+            console.log( '' + body.data.history.length + " messages loaded");
+
+            document.getElementById("user").focus();
+        })
     };
 
     return {
         'init': init
     }
 })();
-

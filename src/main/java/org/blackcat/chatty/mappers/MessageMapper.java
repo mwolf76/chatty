@@ -1,43 +1,33 @@
 package org.blackcat.chatty.mappers;
 
 import de.braintags.io.vertx.pojomapper.annotation.Entity;
+import de.braintags.io.vertx.pojomapper.annotation.field.Embedded;
 import de.braintags.io.vertx.pojomapper.annotation.field.Id;
-import de.braintags.io.vertx.pojomapper.annotation.field.Referenced;
-
-import java.time.Instant;
 
 @Entity
 final public class MessageMapper {
     @Id
-    private String id;
-    private Instant timeStamp;
+    private String uuid;
 
-    @Referenced
-    private UserMapper author;
-
-    @Referenced
-    private RoomMapper room;
-
-    private String text;
-
-    public MessageMapper()
-    {}
-
-    public String getId() {
-        return id;
+    public String getUuid() {
+        return uuid;
     }
 
-    public void setId(String id) {
-        this.id = id;
+    public void setUuid(String uuid) {
+        this.uuid = uuid;
     }
 
-    public Instant getTimeStamp() {
+    private String timeStamp;
+    public String getTimeStamp() {
         return timeStamp;
     }
 
-    public void setTimeStamp(Instant timeStamp) {
+    public void setTimeStamp(String timeStamp) {
         this.timeStamp = timeStamp;
     }
+
+    @Embedded
+    private UserMapper author;
 
     public UserMapper getAuthor() {
         return author;
@@ -47,6 +37,20 @@ final public class MessageMapper {
         this.author = author;
     }
 
+    @Embedded
+    private RoomMapper room;
+    public RoomMapper getRoom() {
+        return room;
+    }
+
+    public void setRoom(RoomMapper room) {
+        this.room = room;
+    }
+    private String text;
+
+    public MessageMapper()
+    {}
+
     public String getText() {
         return text;
     }
@@ -55,19 +59,11 @@ final public class MessageMapper {
         this.text = text;
     }
 
-    public RoomMapper getRoom() {
-        return room;
-    }
-
-    public void setRoom(RoomMapper room) {
-        this.room = room;
-    }
-
     @Override
     public String toString() {
         return "MessageMapper{" +
-                "id='" + id + '\'' +
-                ", timeStamp=" + timeStamp +
+                "uuid='" + uuid + '\'' +
+                ", timeStamp='" + timeStamp + '\'' +
                 ", author=" + author +
                 ", room=" + room +
                 ", text='" + text + '\'' +

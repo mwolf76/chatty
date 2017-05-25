@@ -31,9 +31,6 @@ final public class Configuration {
     private String oauth2ClientSecret;
     private String oauth2Domain;
 
-    /* storage section */
-    private String storageRoot;
-
     public int getHttpPort() {
         return httpPort;
     }
@@ -98,10 +95,6 @@ final public class Configuration {
         return dbName;
     }
 
-    public String getStorageRoot() {
-        return storageRoot;
-    }
-
     void parseDatabaseSection(JsonObject jsonObject) {
         final JsonObject databaseSection = jsonObject.getJsonObject(DATABASE_SECTION);
 
@@ -129,17 +122,10 @@ final public class Configuration {
         this.oauth2Domain = oauth2Section.getString(OAUTH2_DOMAIN);
     }
 
-    void parseStorageSection(JsonObject jsonObject) {
-        final JsonObject storageSection = jsonObject.getJsonObject(STORAGE_SECTION);
-
-        this.storageRoot = storageSection.getString(STORAGE_ROOT);
-    }
-
     public Configuration(JsonObject jsonObject) {
         parseServerSection(jsonObject);
         parseDatabaseSection(jsonObject);
         parseOAuth2Section(jsonObject);
-        parseStorageSection(jsonObject);
     }
 
     @Override
@@ -154,7 +140,6 @@ final public class Configuration {
                 ", oauth2ClientSecret='" + oauth2ClientSecret + '\'' +
                 ", OAuth2Domain='" + getOAuth2Domain() + '\'' +
                 ", timeout=" + timeout +
-                ", storageRoot='" + storageRoot + '\'' +
                 ", sslEnabled=" + sslEnabled() +
                 ", databaseType='" + getDatabaseType() + '\'' +
                 ", databaseHost='" + getDatabaseHost() + '\'' +

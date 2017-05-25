@@ -9,7 +9,7 @@ import de.braintags.io.vertx.pojomapper.mongo.MongoDataStore;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
-import io.vertx.core.json.Json;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -20,6 +20,8 @@ import org.blackcat.chatty.mappers.RoomMapper;
 import org.blackcat.chatty.mappers.UserMapper;
 
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -36,8 +38,12 @@ public class DataStoreVerticle extends AbstractVerticle {
     final public static String RECORD_MESSAGE = "record-message";
     final public static String FETCH_MESSAGES = "fetch-messages";
 
+    final public static String GET_GENERAL_ROOM_UUID = "get-general-room-uuid";
+
     private Logger logger;
     private MongoDataStore mongoDataStore;
+
+    private String generalRoomUUID;
 
     @Override
     public void start(Future<Void> startFuture) {
@@ -70,19 +76,39 @@ public class DataStoreVerticle extends AbstractVerticle {
                         /* msg dispatch */
                         if (queryType.equals(FIND_CREATE_USER_BY_EMAIL)) {
                             findCreateUserByEmail(params, user -> {
-                                msg.reply(Objects.isNull(user) ? null : JsonObject.mapFrom(user));
+                                msg.reply(new JsonObject().put("result",
+                                        Objects.isNull(user) ? null : JsonObject.mapFrom(user)));
                             });
                         } else if (queryType.equals(FIND_USER_BY_UUID)) {
                             findUserByUUID(params, user -> {
-                                msg.reply(Objects.isNull(user) ? null : JsonObject.mapFrom(user));
+                                msg.reply(new JsonObject().put("result",
+                                        Objects.isNull(user) ? null : JsonObject.mapFrom(user)));
                             });
                         } else if (queryType.equals(FIND_ROOM_BY_UUID)) {
                             findRoomByUUID(params, room -> {
-                                msg.reply(Objects.isNull(room) ? null : JsonObject.mapFrom(room));
+                                msg.reply(new JsonObject().put("result",
+                                        Objects.isNull(room) ? null : JsonObject.mapFrom(room)));
                             });
-                        }
+                        } else if (queryType.equals(RECORD_MESSAGE)) {
+                            recordMessage(params, message -> {
+                                msg.reply(new JsonObject().put("result",
+                                        Objects.isNull(message) ? null : JsonObject.mapFrom(message)));
+                            });
+                        } else if (queryType.equals(FETCH_MESSAGES)) {
+                            fetchMessages(params, messages -> {
+                                JsonArray jsonArray = new JsonArray();
+                                for (MessageMapper message: messages) {
+                                    jsonArray.add(JsonObject.mapFrom(message));
+                                }
 
-                        else {
+                                msg.reply(new JsonObject().put("result",
+                                        new JsonObject().put("messages", jsonArray)));
+                            });
+                        } else if (queryType.equals(GET_GENERAL_ROOM_UUID)) {
+                            msg.reply(new JsonObject()
+                                    .put("result", new JsonObject()
+                                            .put("uuid", this.generalRoomUUID)));
+                        } else {
                             logger.error("Unsupported query type: {}", queryType);
                         }
                     });
@@ -90,11 +116,22 @@ public class DataStoreVerticle extends AbstractVerticle {
             future.complete();
         }, res -> {
             if (res.succeeded()) {
-                startFuture.complete();
+                initData(done -> {
+                    startFuture.complete();
+                });
+
             } else {
                 Throwable cause = res.cause();
                 startFuture.fail(cause);
             }
+        });
+    }
+
+    private void initData(Handler<Void> handler) {
+        findCreateRoomByName(new JsonObject().put("name", "general"), room -> {
+            logger.info("General room is {}", room);
+            generalRoomUUID = room.getUuid();
+            handler.handle(null);
         });
     }
 
@@ -123,15 +160,15 @@ public class DataStoreVerticle extends AbstractVerticle {
                         } else {
                             UserMapper userMapper = nextAsyncResult.result();
 
-                            logger.trace("Found matching user for {}: {}", email, userMapper);
+                            logger.debug("Found matching user for {}: {}", email, userMapper);
                             handler.handle(userMapper);
                         }
                     });
                 } else {
                     /* User does not exist. create it */
                     UserMapper userMapper = new UserMapper();
-                    userMapper.setEmail(email);
                     userMapper.setUuid(UUID.randomUUID().toString());
+                    userMapper.setEmail(email);
 
                     IWrite<UserMapper> write = mongoDataStore.createWrite(UserMapper.class);
                     write.add(userMapper);
@@ -146,7 +183,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                             IWriteResult writeResult = result.result();
                             IWriteEntry entry = writeResult.iterator().next();
 
-                            logger.trace("Created new userMapper for {}: {}", email, entry.getStoreObject());
+                            logger.debug("Created new userMapper for {}: {}", email, entry.getStoreObject());
                             handler.handle(userMapper);
                         }
                     });
@@ -180,15 +217,15 @@ public class DataStoreVerticle extends AbstractVerticle {
                         } else {
                             RoomMapper roomMapper = nextAsyncResult.result();
 
-                            logger.trace("Found matching room for {}: {}", name, roomMapper);
+                            logger.debug("Found matching room for {}: {}", name, roomMapper);
                             handler.handle(roomMapper);
                         }
                     });
                 } else {
                     /* Room does not exist. create it */
                     RoomMapper roomMapper = new RoomMapper();
-                    roomMapper.setName(name);
                     roomMapper.setUuid(UUID.randomUUID().toString());
+                    roomMapper.setName(name);
 
                     IWrite<RoomMapper> write = mongoDataStore.createWrite(RoomMapper.class);
                     write.add(roomMapper);
@@ -203,7 +240,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                             IWriteResult writeResult = result.result();
                             IWriteEntry entry = writeResult.iterator().next();
 
-                            logger.trace("Created new room for {}: {}", name, roomMapper);
+                            logger.debug("Created new room for {}: {}", name, roomMapper);
                             handler.handle(roomMapper);
                         }
                     });
@@ -237,7 +274,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                         } else {
                             UserMapper userMapper = nextAsyncResult.result();
 
-                            logger.trace("Found matching user for {}: {}", uuid, userMapper);
+                            logger.debug("Found matching user for {}: {}", uuid, userMapper);
                             handler.handle(userMapper);
                         }
                     });
@@ -275,7 +312,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                         } else {
                             RoomMapper roomMapper = nextAsyncResult.result();
 
-                            logger.trace("Found matching room for {}: {}", uuid, roomMapper);
+                            logger.debug("Found matching room for {}: {}", uuid, roomMapper);
                             handler.handle(roomMapper);
                         }
                     });
@@ -299,7 +336,7 @@ public class DataStoreVerticle extends AbstractVerticle {
         MessageMapper messageMapper = new MessageMapper();
         messageMapper.setAuthor(user);
         messageMapper.setText(messageText);
-        messageMapper.setTimeStamp(timeStamp);
+        messageMapper.setTimeStamp(timeStamp.toString());
         messageMapper.setRoom(room);
 
         IWrite<MessageMapper> write = mongoDataStore.createWrite(MessageMapper.class);
@@ -315,8 +352,40 @@ public class DataStoreVerticle extends AbstractVerticle {
                 IWriteResult writeResult = result.result();
                 IWriteEntry entry = writeResult.iterator().next();
 
-                logger.trace("Recorded new message: {}", messageMapper.toString());
+                logger.info("Recorded new message: {}", messageMapper.toString());
                 handler.handle(messageMapper);
+            }
+        });
+    }
+
+    private void fetchMessages(JsonObject params, Handler<List<MessageMapper>> handler) {
+
+        /* fetch params */
+        String roomUUID = params.getString("roomUUID");
+
+        IQuery<MessageMapper> query = mongoDataStore.createQuery(MessageMapper.class);
+        // query.field("roomUUID").is(roomUUID);
+
+        query.execute(queryAsyncResult -> {
+            if (queryAsyncResult.failed()) {
+                Throwable cause = queryAsyncResult.cause();
+
+                logger.error(cause);
+                throw new RuntimeException(cause);
+            } else {
+                IQueryResult<MessageMapper> queryResult = queryAsyncResult.result();
+                queryResult.toArray(arrayAsyncResult -> {
+                    if (arrayAsyncResult.failed()) {
+                        Throwable cause = arrayAsyncResult.cause();
+
+                        logger.error(cause);
+                        throw new RuntimeException(cause);
+                    } else {
+                        Object[] objects = arrayAsyncResult.result();
+                        MessageMapper[] messages = Arrays.copyOf(objects, objects.length, MessageMapper[].class);
+                        handler.handle(Arrays.asList(messages));
+                    }
+                });
             }
         });
     }
