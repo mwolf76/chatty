@@ -1,8 +1,9 @@
 package org.blackcat.chatty.mappers;
 
-import de.braintags.io.vertx.pojomapper.annotation.Entity;
-import de.braintags.io.vertx.pojomapper.annotation.field.Embedded;
-import de.braintags.io.vertx.pojomapper.annotation.field.Id;
+
+import de.braintags.vertx.jomnigate.annotation.Entity;
+import de.braintags.vertx.jomnigate.annotation.field.Id;
+import de.braintags.vertx.jomnigate.annotation.field.Referenced;
 
 @Entity
 final public class MessageMapper {
@@ -26,7 +27,7 @@ final public class MessageMapper {
         this.timeStamp = timeStamp;
     }
 
-    @Embedded
+    @Referenced
     private UserMapper author;
 
     public UserMapper getAuthor() {
@@ -37,7 +38,7 @@ final public class MessageMapper {
         this.author = author;
     }
 
-    @Embedded
+    @Referenced
     private RoomMapper room;
     public RoomMapper getRoom() {
         return room;

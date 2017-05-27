@@ -1,11 +1,14 @@
 package org.blackcat.chatty.verticles;
 
-import de.braintags.io.vertx.pojomapper.dataaccess.query.IQuery;
-import de.braintags.io.vertx.pojomapper.dataaccess.query.IQueryResult;
-import de.braintags.io.vertx.pojomapper.dataaccess.write.IWrite;
-import de.braintags.io.vertx.pojomapper.dataaccess.write.IWriteEntry;
-import de.braintags.io.vertx.pojomapper.dataaccess.write.IWriteResult;
-import de.braintags.io.vertx.pojomapper.mongo.MongoDataStore;
+import de.braintags.vertx.jomnigate.dataaccess.query.IQuery;
+import de.braintags.vertx.jomnigate.dataaccess.query.IQueryResult;
+import de.braintags.vertx.jomnigate.dataaccess.query.ISearchCondition;
+import de.braintags.vertx.jomnigate.dataaccess.write.IWrite;
+import de.braintags.vertx.jomnigate.dataaccess.write.IWriteEntry;
+import de.braintags.vertx.jomnigate.dataaccess.write.IWriteResult;
+import de.braintags.vertx.jomnigate.init.DataStoreSettings;
+import de.braintags.vertx.jomnigate.mongo.MongoDataStore;
+import de.braintags.vertx.jomnigate.mongo.init.MongoDataStoreInit;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -19,7 +22,6 @@ import org.blackcat.chatty.mappers.MessageMapper;
 import org.blackcat.chatty.mappers.RoomMapper;
 import org.blackcat.chatty.mappers.UserMapper;
 
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -54,18 +56,21 @@ public class DataStoreVerticle extends AbstractVerticle {
             /* retrieve configuration object from vert.x ctx */
             final Configuration configuration = new Configuration(vertx.getOrCreateContext().config());
 
-            /* connect to mongo data store */
+            /* connect to mongodb data store */
             String connectionString = String.format("%s://%s:%s",
                     configuration.getDatabaseType(),
                     configuration.getDatabaseHost(),
                     configuration.getDatabasePort());
 
-            JsonObject mongoConfig = new JsonObject()
+            JsonObject mongodbConfig = new JsonObject()
                     .put("connection_string", connectionString)
                     .put("db_name", configuration.getDatabaseName());
 
-            MongoClient mongoClient = MongoClient.createShared(vertx, mongoConfig);
-            mongoDataStore = new MongoDataStore(vertx, mongoClient, mongoConfig);
+            final DataStoreSettings dataStoreSettings =
+                    new DataStoreSettings();
+
+            MongoClient mongoClient = MongoClient.createShared(vertx, mongodbConfig);
+            mongoDataStore = new MongoDataStore(vertx, mongoClient, new JsonObject(), dataStoreSettings);
 
             vertx.eventBus()
                     .consumer(ADDRESS, msg -> {
@@ -119,9 +124,9 @@ public class DataStoreVerticle extends AbstractVerticle {
                 initData(done -> {
                     startFuture.complete();
                 });
-
             } else {
                 Throwable cause = res.cause();
+                logger.error(cause.toString());
                 startFuture.fail(cause);
             }
         });
@@ -141,7 +146,7 @@ public class DataStoreVerticle extends AbstractVerticle {
         String email = params.getString("email");
 
         IQuery<UserMapper> query = mongoDataStore.createQuery(UserMapper.class);
-        query.field("email").is(email);
+        query.setSearchCondition(ISearchCondition.isEqual("email", email));
         query.execute(queryAsyncResult -> {
             if (queryAsyncResult.failed()) {
                 Throwable cause = queryAsyncResult.cause();
@@ -198,7 +203,8 @@ public class DataStoreVerticle extends AbstractVerticle {
         String name = params.getString("name");
 
         IQuery<RoomMapper> query = mongoDataStore.createQuery(RoomMapper.class);
-        query.field("name").is(name);
+        query.setSearchCondition(ISearchCondition.isEqual("name", name));
+
         query.execute(queryAsyncResult -> {
             if (queryAsyncResult.failed()) {
                 Throwable cause = queryAsyncResult.cause();
@@ -255,7 +261,8 @@ public class DataStoreVerticle extends AbstractVerticle {
         String uuid = params.getString("uuid");
 
         IQuery<UserMapper> query = mongoDataStore.createQuery(UserMapper.class);
-        query.field("uuid").is(uuid);
+        query.setSearchCondition(ISearchCondition.isEqual("uuid", uuid));
+
         query.execute(queryAsyncResult -> {
             if (queryAsyncResult.failed()) {
                 Throwable cause = queryAsyncResult.cause();
@@ -293,7 +300,8 @@ public class DataStoreVerticle extends AbstractVerticle {
         String uuid = params.getString("uuid");
 
         IQuery<RoomMapper> query = mongoDataStore.createQuery(RoomMapper.class);
-        query.field("uuid").is(uuid);
+        query.setSearchCondition(ISearchCondition.isEqual("uuid", uuid));
+
         query.execute(queryAsyncResult -> {
             if (queryAsyncResult.failed()) {
                 Throwable cause = queryAsyncResult.cause();
@@ -330,13 +338,13 @@ public class DataStoreVerticle extends AbstractVerticle {
         /* fetch params */
         UserMapper user = params.getJsonObject("user").mapTo(UserMapper.class);
         String messageText = params.getString("messageText");
-        Instant timeStamp = params.getInstant("timeStamp");
+        String timeStamp = params.getString("timeStamp");
         RoomMapper room = params.getJsonObject("room").mapTo(RoomMapper.class);
 
         MessageMapper messageMapper = new MessageMapper();
         messageMapper.setAuthor(user);
         messageMapper.setText(messageText);
-        messageMapper.setTimeStamp(timeStamp.toString());
+        messageMapper.setTimeStamp(timeStamp);
         messageMapper.setRoom(room);
 
         IWrite<MessageMapper> write = mongoDataStore.createWrite(MessageMapper.class);
@@ -362,31 +370,33 @@ public class DataStoreVerticle extends AbstractVerticle {
 
         /* fetch params */
         String roomUUID = params.getString("roomUUID");
+        findRoomByUUID(new JsonObject().put("uuid", roomUUID), room -> {
 
-        IQuery<MessageMapper> query = mongoDataStore.createQuery(MessageMapper.class);
-        // query.field("roomUUID").is(roomUUID);
+            IQuery<MessageMapper> query = mongoDataStore.createQuery(MessageMapper.class);
+            query.setSearchCondition(ISearchCondition.isEqual("room", room.getUuid()));
 
-        query.execute(queryAsyncResult -> {
-            if (queryAsyncResult.failed()) {
-                Throwable cause = queryAsyncResult.cause();
+            query.execute(queryAsyncResult -> {
+                if (queryAsyncResult.failed()) {
+                    Throwable cause = queryAsyncResult.cause();
 
-                logger.error(cause);
-                throw new RuntimeException(cause);
-            } else {
-                IQueryResult<MessageMapper> queryResult = queryAsyncResult.result();
-                queryResult.toArray(arrayAsyncResult -> {
-                    if (arrayAsyncResult.failed()) {
-                        Throwable cause = arrayAsyncResult.cause();
+                    logger.error(cause);
+                    throw new RuntimeException(cause);
+                } else {
+                    IQueryResult<MessageMapper> queryResult = queryAsyncResult.result();
+                    queryResult.toArray(arrayAsyncResult -> {
+                        if (arrayAsyncResult.failed()) {
+                            Throwable cause = arrayAsyncResult.cause();
 
-                        logger.error(cause);
-                        throw new RuntimeException(cause);
-                    } else {
-                        Object[] objects = arrayAsyncResult.result();
-                        MessageMapper[] messages = Arrays.copyOf(objects, objects.length, MessageMapper[].class);
-                        handler.handle(Arrays.asList(messages));
-                    }
-                });
-            }
+                            logger.error(cause);
+                            throw new RuntimeException(cause);
+                        } else {
+                            Object[] objects = arrayAsyncResult.result();
+                            MessageMapper[] messages = Arrays.copyOf(objects, objects.length, MessageMapper[].class);
+                            handler.handle(Arrays.asList(messages));
+                        }
+                    });
+                }
+            });
         });
     }
 }

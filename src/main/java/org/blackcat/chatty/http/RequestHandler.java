@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static java.time.format.DateTimeFormatter.ISO_INSTANT;
 import static org.blackcat.chatty.util.Utils.urlDecode;
 
 public class RequestHandler implements Handler<HttpServerRequest> {
@@ -139,7 +140,8 @@ public class RequestHandler implements Handler<HttpServerRequest> {
 
     private String formatMessage(MessageMapper messageMapper) {
         return MessageFormat.format("{0} &lt;{1}&gt;: {2}",
-                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(Date.from(Instant.now())),
+                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(
+                        Date.from(Instant.from(ISO_INSTANT.parse(messageMapper.getTimeStamp())))),
                 messageMapper.getAuthor().getEmail(), HtmlEscape.escapeTextArea(messageMapper.getText()));
     }
 
@@ -269,6 +271,11 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         });
     }
 
+    /**
+     * Retrieves messages history for the given room.
+     *
+     * @param ctx
+     */
     private void history(RoutingContext ctx) {
         String email = getSessionUserEmail(ctx);
 
@@ -281,7 +288,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 fetchMessages(userMapper, roomMapper, messages -> {
 
                     final List<String> history = messages.stream()
-                            .map(message -> formatMessage(message))
+                            .map(this::formatMessage)
                             .collect(Collectors.toList());
 
                     String body = new JsonObject()
@@ -427,7 +434,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 .put("params", new JsonObject()
                         .put("user", JsonObject.mapFrom(userMapper))
                         .put("messageText", messageText)
-                        .put("timeStamp", timeStamp) /* XXX */
+                        .put("timeStamp", timeStamp.toString())
                         .put("room", JsonObject.mapFrom(roomMapper)));
 
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
@@ -456,7 +463,6 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         JsonObject query = new JsonObject()
                 .put("type", DataStoreVerticle.FETCH_MESSAGES)
                 .put("params", new JsonObject()
-                        .put("userUUID", userMapper.getUuid())
                         .put("roomUUID", roomMapper.getUuid()));
 
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {

@@ -1,7 +1,7 @@
 package org.blackcat.chatty.mappers;
 
-import de.braintags.io.vertx.pojomapper.annotation.Entity;
-import de.braintags.io.vertx.pojomapper.annotation.field.Id;
+import de.braintags.vertx.jomnigate.annotation.Entity;
+import de.braintags.vertx.jomnigate.annotation.field.Id;
 
 @Entity
 final public class RoomMapper {
@@ -33,5 +33,20 @@ final public class RoomMapper {
                 "uuid='" + uuid + '\'' +
                 ", name='" + name + '\'' +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        RoomMapper that = (RoomMapper) o;
+
+        return uuid.equals(that.uuid);
+    }
+
+    @Override
+    public int hashCode() {
+        return uuid.hashCode();
     }
 }

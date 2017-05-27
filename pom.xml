@@ -91,12 +91,12 @@
         <dependency>
             <groupId>de.braintags</groupId>
             <artifactId>vertx-pojo-mapper-common</artifactId>
-            <version>1.3.1</version>
+            <version>1.4.0-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>de.braintags</groupId>
             <artifactId>vertx-pojongo</artifactId>
-            <version>1.3.1</version>
+            <version>1.4.0-SNAPSHOT</version>
         </dependency>
     </dependencies>
 
