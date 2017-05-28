@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/sockjs/0.3.4/sockjs.min.js"></script>
 <script src="/static/js/vertx-eventbus.js"></script>
 <script src="/static/js/main.js"></script>
+<script src="/static/js/underscore.js"></script>
 <script>
 /* setting up */
 $(document).ready(function() {
@@ -30,6 +31,8 @@ $(document).ready(function() {
     </ul>
 </div>
 <div class="container">
+    <ul id="userList" class="list-group">
+    </ul>
     <textarea id="room" class="form-control" rows="20" readonly></textarea>
     <br/>
     <textarea id="user" class="form-control"></textarea>

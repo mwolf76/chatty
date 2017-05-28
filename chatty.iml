@@ -41,6 +41,7 @@
     <orderEntry type="library" name="Maven: io.vertx:vertx-auth-common:3.4.1" level="project" />
     <orderEntry type="library" name="Maven: io.vertx:vertx-auth-oauth2:3.4.1" level="project" />
     <orderEntry type="library" name="Maven: io.vertx:vertx-jwt:3.4.1" level="project" />
+    <orderEntry type="library" name="Maven: io.vertx:vertx-redis-client:3.4.1" level="project" />
     <orderEntry type="library" name="Maven: de.braintags:vertx-pojo-mapper-common:1.4.0-SNAPSHOT" level="project" />
     <orderEntry type="library" name="Maven: de.braintags:vertx-util:1.4.0-SNAPSHOT" level="project" />
     <orderEntry type="library" name="Maven: org.hamcrest:hamcrest-library:1.3" level="project" />

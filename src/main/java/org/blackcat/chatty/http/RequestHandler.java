@@ -24,6 +24,7 @@ import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.templ.TemplateEngine;
 import org.blackcat.chatty.conf.Configuration;
 import org.blackcat.chatty.mappers.MessageMapper;
+import org.blackcat.chatty.mappers.Queries;
 import org.blackcat.chatty.mappers.RoomMapper;
 import org.blackcat.chatty.mappers.UserMapper;
 import org.blackcat.chatty.util.HtmlEscape;
@@ -71,8 +72,8 @@ public class RequestHandler implements Handler<HttpServerRequest> {
 
         // Allow events for the designated addresses in/out of the event bus bridge
         BridgeOptions opts = new BridgeOptions()
-                .addInboundPermitted(new PermittedOptions().setAddress("webchat.server"))
-                .addOutboundPermitted(new PermittedOptions().setAddress("webchat.client"));
+                .addInboundPermitted(new PermittedOptions().setAddressRegex("webchat.*"))
+                .addOutboundPermitted(new PermittedOptions().setAddressRegex("webchat.*"));
 
         // Create the event bus bridge and add it to the router.
         SockJSHandler ebHandler = SockJSHandler.create(vertx).bridge(opts);
@@ -91,15 +92,9 @@ public class RequestHandler implements Handler<HttpServerRequest> {
             String roomID = jsonObject.getString("roomID");
             String text = jsonObject.getString("text");
 
-            findUserByUUID(userID, user -> {
-                findRoomByUUID(roomID, room -> {
-                    recordMessage(user, text, Instant.now(), room, messageMapper -> {
-
-//                        String displayText = MessageFormat.format("{0} &lt;{1}&gt;: {2}",
-//                                DateFormat.getDateTimeInstance(DateFormat.SHORT,
-//                                        DateFormat.MEDIUM).format(Date.from(Instant.from(ISO_INSTANT.parse(messageMapper.getTimeStamp())))),
-//                                user.getEmail(), HtmlEscape.escapeTextArea(text));
-
+            Queries.findUserByUUID(vertx, userID, user -> {
+                Queries.findRoomByUUID(vertx, roomID, room -> {
+                    Queries.recordMessage(vertx, user, text, Instant.now(), room, messageMapper -> {
                         eventBus.publish("webchat.client", new JsonObject()
                                 .put("roomID", roomID)
                                 .put("displayText", formatMessage(messageMapper)));
@@ -245,9 +240,9 @@ public class RequestHandler implements Handler<HttpServerRequest> {
     private void main(RoutingContext ctx) {
         String email = getSessionUserEmail(ctx);
 
-        findCreateUserEntityByEmail(email, userMapper -> {
+        Queries.findCreateUserEntityByEmail(vertx, email, userMapper -> {
 
-            getGeneralRoomUUID(roomUUID -> {
+            Queries.getGeneralRoomUUID(vertx, roomUUID -> {
                 ctx
                         .put("userEmail", userMapper.getEmail())
                         .put("userID", userMapper.getUuid())
@@ -282,10 +277,10 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         Path prefix = Paths.get("/protected/history");
         String roomUID = prefix.relativize(Paths.get(urlDecode(ctx.request().path()))).toString();
 
-        findCreateUserEntityByEmail(email, userMapper -> {
-            findRoomByUUID(roomUID, roomMapper -> {
+        Queries.findCreateUserEntityByEmail(vertx, email, userMapper -> {
+            Queries.findRoomByUUID(vertx, roomUID, roomMapper -> {
                 /* TODO: check user authorization for this room, for now we assume we're good */
-                fetchMessages(userMapper, roomMapper, messages -> {
+                Queries.fetchMessages(vertx, userMapper, roomMapper, messages -> {
 
                     final List<String> history = messages.stream()
                             .map(this::formatMessage)
@@ -305,184 +300,6 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         });
     }
 
-
-    /**
-     * Retrieves a User entity by email, or creates a new one if no such entity exists.
-     *
-     * @param email - the user's email
-     * @param handler
-     */
-    private void findCreateUserEntityByEmail(String email, Handler<UserMapper> handler) {
-        JsonObject query = new JsonObject()
-                .put("type", DataStoreVerticle.FIND_CREATE_USER_BY_EMAIL)
-                .put("params", new JsonObject()
-                        .put("email", email));
-
-        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject obj = (JsonObject) reply.result().body();
-                Objects.requireNonNull(obj);
-
-                UserMapper userMapper = obj.getJsonObject("result").mapTo(UserMapper.class);
-                handler.handle(userMapper);
-            }
-        });
-    }
-
-    /**
-     * Retrieves a Room entity by name, or creates a new one if no such entity exists.
-     *
-     * @param name - the room name
-     * @param handler
-     */
-    private void findCreateRoomByName(String name, Handler<RoomMapper> handler) {
-        JsonObject query = new JsonObject()
-                .put("type", DataStoreVerticle.FIND_CREATE_ROOM_BY_NAME)
-                .put("params", new JsonObject()
-                        .put("name", name));
-
-        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject obj = (JsonObject) reply.result().body();
-                Objects.requireNonNull(obj);
-
-                RoomMapper roomMapper = obj.getJsonObject("result").mapTo(RoomMapper.class);
-                handler.handle(roomMapper);
-            }
-        });
-    }
-
-    /**
-     * Retrieves a User entity by uuid.
-     *
-     * @param uuid
-     * @param handler
-     */
-    private void findUserByUUID(String uuid, Handler<UserMapper> handler) {
-        JsonObject query = new JsonObject()
-                .put("type", DataStoreVerticle.FIND_USER_BY_UUID)
-                .put("params", new JsonObject()
-                        .put("uuid", uuid));
-
-        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject obj = (JsonObject) reply.result().body();
-                if (! Objects.isNull(obj)) {
-                    UserMapper userMapper = obj.getJsonObject("result").mapTo(UserMapper.class);
-                    handler.handle(userMapper);
-                } else handler.handle(null);
-            }
-        });
-    }
-
-    /**
-     * Retrieves a Room entity by uuid.
-     *
-     * @param uuid
-     * @param handler
-     */
-    private void findRoomByUUID(String uuid, Handler<RoomMapper> handler) {
-        JsonObject query = new JsonObject()
-                .put("type", DataStoreVerticle.FIND_ROOM_BY_UUID)
-                .put("params", new JsonObject()
-                        .put("uuid", uuid));
-
-        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject obj = (JsonObject) reply.result().body();
-                if (! Objects.isNull(obj)) {
-                    RoomMapper roomMapper = obj.getJsonObject("result").mapTo(RoomMapper.class);
-                    handler.handle(roomMapper);
-                } else handler.handle(null);
-            }
-        });
-    }
-
-    private void getGeneralRoomUUID(Handler<String> handler) {
-        JsonObject query = new JsonObject()
-                .put("type", DataStoreVerticle.GET_GENERAL_ROOM_UUID);
-
-        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject obj = (JsonObject) reply.result().body();
-                if (! Objects.isNull(obj)) {
-                    String uuid = obj.getJsonObject("result").getString("uuid");
-                    handler.handle(uuid);
-                } else handler.handle(null);
-            }
-        });
-    }
-
-    /**
-     * Records a new message: who said what, when and where.
-     *
-     * @param userMapper
-     * @param timeStamp
-     * @param messageText
-     * @param handler
-     */
-    private void recordMessage(UserMapper userMapper, String messageText, Instant timeStamp,
-                               RoomMapper roomMapper, Handler<MessageMapper> handler) {
-
-        Objects.requireNonNull(userMapper, "user is null");
-        Objects.requireNonNull(messageText, "messageText is null");
-        Objects.requireNonNull(timeStamp, "timeStamp is null");
-        Objects.requireNonNull(roomMapper, "room is null");
-
-        JsonObject query = new JsonObject()
-                .put("type", DataStoreVerticle.RECORD_MESSAGE)
-                .put("params", new JsonObject()
-                        .put("user", JsonObject.mapFrom(userMapper))
-                        .put("messageText", messageText)
-                        .put("timeStamp", timeStamp.toString())
-                        .put("room", JsonObject.mapFrom(roomMapper)));
-
-        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject body = (JsonObject) reply.result().body();
-                MessageMapper messageMapper = body.getJsonObject("result").mapTo(MessageMapper.class);
-                handler.handle(messageMapper); /* done */
-            } else {
-                final Throwable cause = reply.cause();
-                logger.error(cause.toString());
-            }
-        });
-    }
-
-    /**
-     * Fetches messages for a given room. User permissions shall be checked (TODO)
-     *
-     * @param userMapper
-     * @param roomMapper
-     * @param handler
-     */
-    private void fetchMessages(UserMapper userMapper, RoomMapper roomMapper, Handler<List<MessageMapper>> handler) {
-        Objects.requireNonNull(userMapper, "user is null");
-        Objects.requireNonNull(roomMapper, "room is null");
-
-        JsonObject query = new JsonObject()
-                .put("type", DataStoreVerticle.FETCH_MESSAGES)
-                .put("params", new JsonObject()
-                        .put("roomUUID", roomMapper.getUuid()));
-
-        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject body = (JsonObject) reply.result().body();
-                final List<JsonObject> jsonObjects =
-                        body.getJsonObject("result").getJsonArray("messages").getList();
-
-                List<MessageMapper> messages = new ArrayList<>();
-                for (JsonObject obj: jsonObjects) {
-                    MessageMapper messageMapper = obj.mapTo(MessageMapper.class);
-                    messages.add(messageMapper);
-                }
-                handler.handle(messages);
-            } else {
-                final Throwable cause = reply.cause();
-                logger.error(cause.toString());
-            }
-        });
-    }
 
 
     /*** Responders ***************************************************************************************************/

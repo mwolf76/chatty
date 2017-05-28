@@ -8,7 +8,6 @@ import de.braintags.vertx.jomnigate.dataaccess.write.IWriteEntry;
 import de.braintags.vertx.jomnigate.dataaccess.write.IWriteResult;
 import de.braintags.vertx.jomnigate.init.DataStoreSettings;
 import de.braintags.vertx.jomnigate.mongo.MongoDataStore;
-import de.braintags.vertx.jomnigate.mongo.init.MongoDataStoreInit;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -29,7 +28,7 @@ import java.util.UUID;
 
 public class DataStoreVerticle extends AbstractVerticle {
 
-    final public static String ADDRESS = "data-store";
+    final public static String ADDRESS = "webchat.data-store";
 
     /* queries */
     final public static String FIND_CREATE_USER_BY_EMAIL = "find-create-user-by-email";

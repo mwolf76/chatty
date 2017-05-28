@@ -22,7 +22,8 @@ public class MainVerticle extends AbstractVerticle {
 
         List<AbstractVerticle> verticles = Arrays.asList(
                 new DataStoreVerticle(),
-                new AppVerticle());
+                new PresenceVerticle(),
+                new WebVerticle());
 
         AtomicInteger verticleCount = new AtomicInteger(verticles.size());
 

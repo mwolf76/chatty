@@ -15,14 +15,14 @@ import org.blackcat.chatty.http.RequestHandler;
 import java.net.URL;
 import java.net.URLClassLoader;
 
-public class AppVerticle extends AbstractVerticle {
+public class WebVerticle extends AbstractVerticle {
 
     private Logger logger;
 
     @Override
     public void start(Future<Void> startFuture) {
 
-        logger = LoggerFactory.getLogger(AppVerticle.class);
+        logger = LoggerFactory.getLogger(WebVerticle.class);
         vertx.executeBlocking(future -> {
 
             ClassLoader cl = ClassLoader.getSystemClassLoader();

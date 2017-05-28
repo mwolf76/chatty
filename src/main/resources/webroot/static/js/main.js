@@ -6,12 +6,22 @@ window.WebChat.Channel = (function() {
     var userID;
     var roomID;
     var historyURL;
+    var usersMap;
 
     /**
      * Channel initialization
      *
      * @param {Object} params
      */
+    function appendUser(email) {
+        var list = document.getElementById('userList');
+
+        var entry = document.createElement('li');
+        entry.appendChild(document.createTextNode(email));
+
+        list.appendChild(entry);
+    }
+
     var init = function(params) {
 
         eventBus = new EventBus("/eventbus/");
@@ -20,17 +30,46 @@ window.WebChat.Channel = (function() {
 
                 var messageRoomID = msg.body.roomID;
                 if (messageRoomID != roomID)
-                    return;
+                    return; /* discard */
 
                 var $textarea = $('#room');
                 $textarea.append(msg.body.displayText);
                 $textarea.scrollTop($textarea[0].scrollHeight);
             });
+
+            eventBus.registerHandler("webchat.partakers." + roomID, function (err, msg) {
+                $('#userList').html('');
+                _.each(msg.body.users, function(userID) {
+                    if (userID in usersMap) {
+                        appendUser(usersMap[userID]);
+                    } else {
+                        eventBus.send("webchat.data-store", {
+                            type: "find-user-by-uuid",
+                            params: {
+                                uuid: userID
+                            }
+                        }, function(err, msg) {
+                            var email = msg.body.result.email;
+                            usersMap[userID] = email;
+                            appendUser(usersMap[userID]);
+                        });
+                    }
+                });
+            });
+
+            /* presence heartbeat */
+            setInterval(function() {
+                eventBus.publish("webchat.presence", {
+                    userID: userID,
+                    roomID: roomID
+                });
+            }, 5000);
         };
 
         userID = params.userID;
         roomID = params.roomID;
         historyURL = params.historyURL;
+        usersMap = {};
 
         $('#user').keyup(function (event) {
             if (event.keyCode == 13 || event.which == 13) {
