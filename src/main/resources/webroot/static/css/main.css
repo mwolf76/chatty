@@ -12,14 +12,6 @@
      font-size: 2em;
 }
 
-/*
-.list-group-item div {
-display: inline-block;
-overflow: hidden;
-width: auto;
-background-color: #333;
-} */
-
 .ellipsed-item {
     white-space: nowrap;
     overflow: hidden;
@@ -105,4 +97,9 @@ div.collection {
 }
 .badge-inverse:hover {
   background-color: #1a1a1a;
+}
+
+#user {
+  margin-top: 6px;
+  margin-bottom: 6px;
 }

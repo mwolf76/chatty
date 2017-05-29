@@ -19,10 +19,6 @@ public class Keys {
     static String SERVER_TIMEOUT = "timeout";
     static int DEFAULT_SERVER_TIMEOUT = 30;
 
-    /* STORAGE */
-    static String STORAGE_SECTION = "storage";
-    static String STORAGE_ROOT = "root";
-
     /* DATABASE */
     static String DATABASE_SECTION = "database";
 
@@ -37,6 +33,18 @@ public class Keys {
 
     static String DATABASE_NAME = "name";
     static String DEFAULT_DATABASE_NAME = "data";
+
+    /* REDIS */
+    static String REDIS_SECTION = "redis";
+
+    static String REDIS_HOST = "host";
+    static String DEFAULT_REDIS_HOST = "locahost";
+
+    static String REDIS_PORT = "port";
+    static int DEFAULT_REDIS_PORT = 6379;
+
+    static String REDIS_DATABASE_INDEX = "index";
+    static int DEFAULT_REDIS_DATABASE_INDEX = 0;
 
     /* OAUTH2 */
     static String OAUTH2_SECTION = "oauth2";

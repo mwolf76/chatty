@@ -5,7 +5,6 @@ window.WebChat.Channel = (function() {
     var eventBus;
     var userID;
     var roomID;
-    var historyURL;
     var usersMap;
 
     /**
@@ -14,9 +13,10 @@ window.WebChat.Channel = (function() {
      * @param {Object} params
      */
     function appendUser(email) {
-        var list = document.getElementById('userList');
+        var list = document.getElementById('partakers');
 
         var entry = document.createElement('li');
+        entry.className += ' list-group-item';
         entry.appendChild(document.createTextNode(email));
 
         list.appendChild(entry);
@@ -38,7 +38,7 @@ window.WebChat.Channel = (function() {
             });
 
             eventBus.registerHandler("webchat.partakers." + roomID, function (err, msg) {
-                $('#userList').html('');
+                $('#partakers').html('');
                 _.each(msg.body.users, function(userID) {
                     if (userID in usersMap) {
                         appendUser(usersMap[userID]);
@@ -60,15 +60,17 @@ window.WebChat.Channel = (function() {
             /* presence heartbeat */
             setInterval(function() {
                 eventBus.publish("webchat.presence", {
-                    userID: userID,
-                    roomID: roomID
+                    type: 'update-presence',
+                    params: {
+                        userID: userID,
+                        roomID: roomID
+                    }
                 });
             }, 5000);
         };
 
         userID = params.userID;
         roomID = params.roomID;
-        historyURL = params.historyURL;
         usersMap = {};
 
         $('#user').keyup(function (event) {
@@ -90,14 +92,14 @@ window.WebChat.Channel = (function() {
 
         $.ajax({
             type: 'GET',
-            url: historyURL
+            url: '/protected/history/' + roomID
         }).then(function (body) {
             var $textarea = $('#room');
             body.data.history.forEach(function(msg, index, array) {
                 $textarea.append(msg);
             });
             $textarea.scrollTop($textarea[0].scrollHeight);
-            console.log( '' + body.data.history.length + " messages loaded");
+            console.log( '' + body.data.history.length + " history messages loaded");
 
             document.getElementById("user").focus();
         })

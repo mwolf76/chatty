@@ -25,6 +25,23 @@ final public class Configuration {
     private int dbPort;
     private String dbName;
 
+    /* redis section */
+    private String redisHost;
+    private int redisPort;
+    private int redisDatabaseIndex;
+
+    public String getRedisHost() {
+        return redisHost;
+    }
+
+    public int getRedisPort() {
+        return redisPort;
+    }
+
+    public int getRedisDatabaseIndex() {
+        return redisDatabaseIndex;
+    }
+
     /* oauth2 section */
     private String oauth2Provider;
     private String oauth2ClientID;
@@ -108,6 +125,14 @@ final public class Configuration {
         this.dbName = databaseSection.getString(DATABASE_NAME, DEFAULT_DATABASE_NAME);
     }
 
+    void parseRedisSection(JsonObject jsonObject) {
+        final JsonObject redisSection = jsonObject.getJsonObject(REDIS_SECTION);
+
+        this.redisHost = redisSection.getString(REDIS_HOST, DEFAULT_REDIS_HOST);
+        this.redisPort = redisSection.getInteger(REDIS_PORT, DEFAULT_REDIS_PORT);
+        this.redisDatabaseIndex = redisSection.getInteger(REDIS_DATABASE_INDEX, DEFAULT_REDIS_DATABASE_INDEX);
+    }
+
     void parseOAuth2Section(JsonObject jsonObject) {
         final JsonObject oauth2Section = jsonObject.getJsonObject(OAUTH2_SECTION);
 
@@ -125,6 +150,7 @@ final public class Configuration {
     public Configuration(JsonObject jsonObject) {
         parseServerSection(jsonObject);
         parseDatabaseSection(jsonObject);
+        parseRedisSection(jsonObject);
         parseOAuth2Section(jsonObject);
     }
 
@@ -145,6 +171,9 @@ final public class Configuration {
                 ", databaseHost='" + getDatabaseHost() + '\'' +
                 ", databasePort=" + getDatabasePort() +
                 ", databaseName='" + getDatabaseName() + '\'' +
+                ", redisHost='" + getRedisHost() + '\'' +
+                ", redisPort=" + getRedisPort() +
+                ", redisDatabaseIndex=" + getRedisDatabaseIndex() +
                 '}';
     }
 }

@@ -25,17 +25,27 @@ $(document).ready(function() {
 
 {% block content %}
 <div class="header">
-    <ul class="list-group">
-    <li class="list-group-item"><a href="{{ fragment.getLeft() }}"><span class="glyphicon glyphicon-globe nav-icon"></span></a>
-            <div class="topleft"><span>logged as<br><a href="{{ fragment.getLeft() }}"><strong>{{ context.get("userEmail") }}</strong></a></string></span></div></li>
-    </ul>
+    <div class="row">
+        <div class="col-sm-12">
+        <ul class="list-group">
+        <li class="list-group-item"><a href="{{ fragment.getLeft() }}"><span class="glyphicon glyphicon-globe nav-icon"></span></a>
+                <div class="topleft"><span>logged as<br><a href="{{ fragment.getLeft() }}"><strong>{{ context.get("userEmail") }}</strong></a></string></span></div></li>
+        </ul>
+        </div>
+    </div>
 </div>
-<div class="container">
-    <ul id="userList" class="list-group">
-    </ul>
-    <textarea id="room" class="form-control" rows="20" readonly></textarea>
-    <br/>
-    <textarea id="user" class="form-control"></textarea>
+<div class="row" style="margin-right: -4px; !important">
+    <div class="col-sm-4">
+        <ul id="partakers" class="list-group"></ul>
+    </div>
+    <div class="col-sm-8">
+        <textarea id="room" class="form-control" rows="20" readonly></textarea>
+    </div>
+</div>
+<div class="row" style="margin-right: -4px; !important">
+    <div class="col-sm-12">
+        <textarea id="user" class="form-control"></textarea>
+    </div>
 </div>
 {% endblock %}
 

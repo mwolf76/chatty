@@ -246,8 +246,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 ctx
                         .put("userEmail", userMapper.getEmail())
                         .put("userID", userMapper.getUuid())
-                        .put("roomID", roomUUID)
-                        .put("historyURL", "/protected/history/" + roomUUID);
+                        .put("roomID", roomUUID);
 
                 templateEngine.render(ctx, "templates/main", asyncResult -> {
                     if (asyncResult.succeeded()) {

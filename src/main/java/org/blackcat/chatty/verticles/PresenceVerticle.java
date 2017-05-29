@@ -3,7 +3,6 @@ package org.blackcat.chatty.verticles;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
-import io.vertx.core.MultiMap;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -12,17 +11,25 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
 import io.vertx.redis.RedisOptions;
 import org.blackcat.chatty.conf.Configuration;
-import org.blackcat.chatty.mappers.Queries;
-import org.blackcat.chatty.mappers.UserMapper;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 // TODO: integrate configuration
 public class PresenceVerticle extends AbstractVerticle {
 
     final public static String ADDRESS = "webchat.presence";
+
+    /* queries */
+    final public static String UPDATE_PRESENCE = "update-presence";
+
+    /* how long does a presence message persist? */
+    final private static int PRESENCE_PERSISTENCE_DURATION = 30000; /* ms */
+
+    /* how long between presence broadcast updates? */
+    final private static int PRESENCE_BROADCAST_INTERVAL = 2000; /* ms */
 
     private Logger logger;
     private RedisClient redisClient;
@@ -38,16 +45,27 @@ public class PresenceVerticle extends AbstractVerticle {
             final Configuration configuration = new Configuration(vertx.getOrCreateContext().config());
 
             RedisOptions config = new RedisOptions()
-                    .setHost("127.0.0.1");
+                    .setHost(configuration.getRedisHost());
 
-            redisClient = RedisClient.create(vertx, config).select(0, done -> {
-                logger.info("selected database 0");
+            int databaseIndex = configuration.getRedisDatabaseIndex();
+            redisClient = RedisClient.create(vertx, config).select(databaseIndex, done -> {
+                logger.info("Redis client initialized, selected database {}", databaseIndex);
             });
 
             eventBus.consumer(ADDRESS, msg -> {
-                JsonObject params = (JsonObject) msg.body();
-                updateUserPresence(params, done -> {
-                });
+                JsonObject obj = (JsonObject) msg.body();
+                String queryType = obj.getString("type");
+                JsonObject params = obj.getJsonObject("params");
+
+                /* msg dispatch */
+                if (queryType.equals(UPDATE_PRESENCE)) {
+                    updateUserPresence(params, done -> {
+                        logger.info("Received presence update message: {}",
+                                params.toString());
+                    });
+                } else {
+                    logger.error("Unsupported query type: {}", queryType);
+                }
             });
 
             future.complete();
@@ -67,7 +85,7 @@ public class PresenceVerticle extends AbstractVerticle {
 
     private void initPeriodicUpdates(Handler<Void> handler) {
         EventBus eventBus = vertx.eventBus();
-        vertx.setPeriodic(2000, id -> {
+        vertx.setPeriodic(PRESENCE_BROADCAST_INTERVAL, id -> {
             redisClient.keys("*", arrayAsyncResult -> {
                 if (arrayAsyncResult.succeeded()) {
                     JsonArray jsonArray = arrayAsyncResult.result();
@@ -102,7 +120,7 @@ public class PresenceVerticle extends AbstractVerticle {
 
                                 /* first link of the chain */
                                 Future<Void> initFuture = Future.future(event -> {
-                                    logger.info("Started presence updates ...");
+                                    logger.debug("Started presence updates ...");
                                 });
                                 Future<Void> prevFuture = initFuture;
                                 for (String userID : userIDs) {
@@ -116,8 +134,9 @@ public class PresenceVerticle extends AbstractVerticle {
                                 }
                                 prevFuture.compose(v -> {
                                     final JsonArray users = new JsonArray(userIDs);
-                                    eventBus.publish("webchat.partakers." + roomID, new JsonObject()
-                                            .put("users", users));
+                                    final String channel = "webchat.partakers." + roomID;
+                                    eventBus.publish(channel, new JsonObject().put("users", users));
+                                    logger.info("{} <-- {}", channel, users.toString());
                                 }, initFuture);
 
                                 /* let's get this thing started ... */
@@ -134,11 +153,11 @@ public class PresenceVerticle extends AbstractVerticle {
     }
 
     private void updateUserPresence(JsonObject params, Handler<Void> handler) {
-        /* fetch params */
         String userID = params.getString("userID");
         String roomID = params.getString("roomID");
+
         String key = userID + ":" + roomID;
-        redisClient.psetex(key, 30000, "", done -> {
+        redisClient.psetex(key, PRESENCE_PERSISTENCE_DURATION, "", done -> {
             logger.info(key);
             handler.handle(null);
         });
