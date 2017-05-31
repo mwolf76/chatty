@@ -204,7 +204,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
 
 
         router
-                .getWithRegex(".*/download")
+                .getWithRegex("/protected/download/.*")
                 .handler(this::download);
 
         // logout
@@ -313,14 +313,14 @@ public class RequestHandler implements Handler<HttpServerRequest> {
     private void download(RoutingContext ctx) {
         String email = getSessionUserEmail(ctx);
 
-        Path requestPath = Paths.get(urlDecode(ctx.request().path())).getParent(); /* remove /download */
-        Path prefix = Paths.get("/protected");
+        Path requestPath = Paths.get(urlDecode(ctx.request().path()));
+        Path prefix = Paths.get("/protected/download/");
+
         String roomUID = prefix.relativize(requestPath).toString();
+        logger.info("Downloading messages for room UUID {}", roomUID);
 
         Queries.findCreateUserEntityByEmail(vertx, email, userMapper -> {
-
             Queries.findRoomByUUID(vertx, roomUID, roomMapper -> {
-
                 /* TODO: check user authorization for this room, for now we assume we're good */
                 Queries.fetchMessages(vertx, userMapper, roomMapper, messages -> {
 

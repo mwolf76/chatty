@@ -37,7 +37,7 @@ $(document).ready(function() {
     <div class="col-sm-12">
         <a id="plus-button" href="#add-room-modal" class="btn btn-primary" data-toggle="modal"><span
                 class="glyphicon glyphicon-plus" aria-hidden="true"></span></a>
-        <a id="download-button" href="download" class="btn btn-primary" download><span
+        <a id="download-button" href="/protected/download/{{ context.get('roomID') }}" class="btn btn-primary" download><span
                 class="glyphicon glyphicon-cloud-download" aria-hidden="true"></span></a>
     </div>
 </div>
@@ -69,8 +69,9 @@ $(document).ready(function() {
                 <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
                 <h4 class="modal-title">New room</h4>
             </div>
-            <div class="modal-body">
+            <div class="modal-body text-center">
                 <p>Enter a name for the new room and click <strong>Commit</strong> to apply changes.</p>
+                <br/>
                 <input id="additional-room-input" class="form-control" type="text"
                                placeholder="Enter new room name ...">
                 <br/>
