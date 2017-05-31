@@ -108,7 +108,7 @@ window.WebChat.Channel = (function() {
             .on('click', function (event) {
                 var roomName = $('#additional-room-input').val();
                 putRoom(roomName, function() {
-                    console.log('New room created successfully.');
+                    $('#add-room-modal').modal('hide');
                 });
             });
     };
