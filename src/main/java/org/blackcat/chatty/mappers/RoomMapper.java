@@ -2,7 +2,6 @@ package org.blackcat.chatty.mappers;
 
 import de.braintags.vertx.jomnigate.annotation.Entity;
 import de.braintags.vertx.jomnigate.annotation.field.Id;
-import de.braintags.vertx.jomnigate.annotation.field.Referenced;
 
 @Entity
 final public class RoomMapper {
@@ -25,17 +24,6 @@ final public class RoomMapper {
         this.name = name;
     }
 
-    @Referenced
-    UserMapper creator;
-
-    public UserMapper getCreator() {
-        return creator;
-    }
-
-    public void setCreator(UserMapper creator) {
-        this.creator = creator;
-    }
-
     public RoomMapper()
     {}
 
@@ -44,7 +32,6 @@ final public class RoomMapper {
         return "RoomMapper{" +
                 "uuid='" + uuid + '\'' +
                 ", name='" + name + '\'' +
-                ", creator=" + creator +
                 '}';
     }
 

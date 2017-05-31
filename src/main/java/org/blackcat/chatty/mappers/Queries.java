@@ -53,6 +53,7 @@ public final class Queries {
                 .put("type", DataStoreVerticle.FIND_CREATE_ROOM_BY_NAME)
                 .put("params", new JsonObject()
                         .put("name", name));
+
         logger.info(query);
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
             if (reply.succeeded()) {
@@ -95,41 +96,27 @@ public final class Queries {
      * @param handler
      */
     public static void findRoomByUUID(Vertx vertx, String uuid, Handler<RoomMapper> handler) {
-        if (uuid.isEmpty()) {
-            getGeneralRoomUUID(vertx, generalUUID -> {
-                JsonObject query = new JsonObject()
-                        .put("type", DataStoreVerticle.FIND_ROOM_BY_UUID)
-                        .put("params", new JsonObject()
-                                .put("uuid", generalUUID));
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.FIND_ROOM_BY_UUID)
+                .put("params", new JsonObject()
+                        .put("uuid", uuid));
 
-                logger.info(query);
-                vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-                    if (reply.succeeded()) {
-                        JsonObject obj = (JsonObject) reply.result().body();
-                        if (! Objects.isNull(obj)) {
-                            RoomMapper roomMapper = obj.getJsonObject("result").mapTo(RoomMapper.class);
-                            handler.handle(roomMapper);
-                        } else handler.handle(null);
+        logger.info(query);
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.succeeded()) {
+                JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(null);
+                } else {
+                    JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(null);
+                    } else {
+                        handler.handle(result.mapTo(RoomMapper.class));
                     }
-                });
-            });
-        } else {
-            JsonObject query = new JsonObject()
-                    .put("type", DataStoreVerticle.FIND_ROOM_BY_UUID)
-                    .put("params", new JsonObject()
-                            .put("uuid", uuid));
-
-            logger.info(query);
-            vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-                if (reply.succeeded()) {
-                    JsonObject obj = (JsonObject) reply.result().body();
-                    if (! Objects.isNull(obj)) {
-                        RoomMapper roomMapper = obj.getJsonObject("result").mapTo(RoomMapper.class);
-                        handler.handle(roomMapper);
-                    } else handler.handle(null);
                 }
-            });
-        }
+            }
+        });
     }
 
     public static void getGeneralRoomUUID(Vertx vertx, Handler<String> handler) {

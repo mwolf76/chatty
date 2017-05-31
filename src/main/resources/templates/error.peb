@@ -18,7 +18,7 @@
 <p>{%block message %}{% endblock %}</p>
 <br/>
 <br/>
-<a href="/protected/main">Back to site</a>
+<a href="/protected/">Back to site</a>
 <br/>
 <br/>
 {% endblock %}

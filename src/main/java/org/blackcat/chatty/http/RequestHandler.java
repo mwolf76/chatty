@@ -34,6 +34,7 @@ import java.text.MessageFormat;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static java.time.format.DateTimeFormatter.ISO_INSTANT;
@@ -74,12 +75,11 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         SockJSHandler ebHandler = SockJSHandler.create(vertx).bridge(opts);
         router.route("/eventbus/*").handler(ebHandler);
 
-        // oauth2 setup
-        setupOAuth2(vertx, router, configuration);
-
-        EventBus eventBus = vertx.eventBus();
+        // Router setup
+        setupRouter(vertx, router, configuration);
 
         // Register to listen for messages coming IN to the server
+        final EventBus eventBus = vertx.eventBus();
         eventBus.consumer("webchat.server").handler(message -> {
 
             JsonObject jsonObject = new JsonObject((String) message.body());
@@ -100,8 +100,8 @@ public class RequestHandler implements Handler<HttpServerRequest> {
 
         /* internal index handler */
         router
-                .get("/protected/main")
-                .handler(this::main);
+                .get("/protected/protectedIndex")
+                .handler(this::protectedIndex);
 
         router
                 .getWithRegex("/protected/history/.*")
@@ -142,7 +142,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 messageMapper.getAuthor().getEmail(), HtmlEscape.escapeTextArea(messageMapper.getText()));
     }
 
-    private void setupOAuth2(final Vertx vertx, final Router router, final Configuration configuration) {
+    private void setupRouter(final Vertx vertx, final Router router, final Configuration configuration) {
 
         final String callbackURL = "/oauth2";
 
@@ -175,26 +175,34 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         // setup the callback handler for receiving the Google callback
         authHandler.setupCallback(router.get(callbackURL));
 
+        // public index
         router
                 .route("/")
-                .handler(this::publicIndexGetRequest);
+                .handler(this::publicIndex);
 
-        // put sharing mgmt under oauth2
-        router
-                .route("/share/*")
-                .handler(authHandler);
-
-        // put protected resource under oauth2
+        // put protected resources under oauth2
         router
                 .route("/protected/*")
                 .handler(authHandler);
 
-        /* internal index handler */
-        router
-                .get("/protected/main")
-                .handler(this::main);
+        // enable message parsing
+        router.routeWithRegex("/protected/.*")
+                .handler(BodyHandler.create());
 
         /* internal index handler */
+        router
+                .get("/protected/")
+                .handler(this::protectedIndex);
+
+        router
+                .getWithRegex("/protected/rooms/.*")
+                .handler(this::main);
+
+        router
+                .put("/protected/new-room")
+                .handler(this::newRoom);
+
+
         router
                 .getWithRegex(".*/download")
                 .handler(this::download);
@@ -232,7 +240,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
     }
 
     /*** Route handlers ***********************************************************************************************/
-    private void publicIndexGetRequest(RoutingContext ctx) {
+    private void publicIndex(RoutingContext ctx) {
         templateEngine.render(ctx, "templates/index", asyncResult -> {
             if (asyncResult.succeeded()) {
                 Buffer result = asyncResult.result();
@@ -244,15 +252,33 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         });
     }
 
+    private void protectedIndex(RoutingContext ctx) {
+        Queries.getGeneralRoomUUID(vertx, roomUUID -> {
+            final String redirectTo = "/protected/rooms/" + roomUUID;
+            found(ctx, redirectTo);
+        });
+    }
+
+    /* main page server */
     private void main(RoutingContext ctx) {
         String email = getSessionUserEmail(ctx);
 
-        Queries.getGeneralRoomUUID(vertx, roomUUID -> {
-            Queries.findRoomByUUID(vertx, roomUUID, room -> {
-                Queries.findCreateUserEntityByEmail(vertx, email, userMapper -> {
+        Path prefix = Paths.get("/protected/rooms/");
+        Path requestPath = Paths.get(ctx.request().path());
+        Path roomUUIDPath = prefix.relativize(requestPath);
+        String roomUUID = roomUUIDPath.toString();
+
+        logger.info("Serving page for room {}", roomUUID);
+        Queries.findRoomByUUID(vertx, roomUUID, room -> {
+            if (Objects.isNull(room)) {
+                notFound(ctx);
+            } else {
+                Queries.findCreateUserEntityByEmail(vertx, email, user -> {
+                    Objects.requireNonNull(user);
+
                     ctx
-                            .put("userEmail", userMapper.getEmail())
-                            .put("userID", userMapper.getUuid())
+                            .put("userEmail", user.getEmail())
+                            .put("userID", user.getUuid())
                             .put("roomID", room.getUuid())
                             .put("roomName", room.getName());
 
@@ -270,8 +296,17 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                         }
                     });
                 });
-            });
+            }
+        });
+    }
 
+    private void newRoom(RoutingContext ctx) {
+        final MultiMap params = ctx.request().params();
+        final String roomName = params.get("roomName");
+
+        Queries.findCreateRoomByName(vertx, roomName, room -> {
+            logger.info("Created room {}", roomName);
+            done(ctx);
         });
     }
 

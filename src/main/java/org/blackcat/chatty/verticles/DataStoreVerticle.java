@@ -1,11 +1,8 @@
 package org.blackcat.chatty.verticles;
 
 import de.braintags.vertx.jomnigate.dataaccess.query.IQuery;
-import de.braintags.vertx.jomnigate.dataaccess.query.IQueryResult;
 import de.braintags.vertx.jomnigate.dataaccess.query.ISearchCondition;
 import de.braintags.vertx.jomnigate.dataaccess.write.IWrite;
-import de.braintags.vertx.jomnigate.dataaccess.write.IWriteEntry;
-import de.braintags.vertx.jomnigate.dataaccess.write.IWriteResult;
 import de.braintags.vertx.jomnigate.init.DataStoreSettings;
 import de.braintags.vertx.jomnigate.mongo.MongoDataStore;
 import de.braintags.vertx.jomnigate.util.QueryHelper;
@@ -13,7 +10,6 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
-import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -33,18 +29,23 @@ public class DataStoreVerticle extends AbstractVerticle {
 
     final public static String ADDRESS = "webchat.data-store";
 
-    /* queries */
-    final public static String FIND_CREATE_USER_BY_EMAIL = "find-create-user-by-email";
-    final public static String FIND_CREATE_ROOM_BY_NAME = "find-create-room-by-name";
+    /* canonical getters  */
     final public static String FIND_USER_BY_UUID = "find-user-by-uuid";
     final public static String FIND_ROOM_BY_UUID = "find-room-by-uuid";
 
+    /* specific getters */
+    final public static String FIND_CREATE_USER_BY_EMAIL = "find-create-user-by-email";
+    final public static String FIND_CREATE_ROOM_BY_NAME = "find-create-room-by-name";
+
+    /* message queries */
     final public static String RECORD_MESSAGE = "record-message";
     final public static String FETCH_MESSAGES = "fetch-messages";
 
+    /* room queries */
     final public static String GET_GENERAL_ROOM_UUID = "get-general-room-uuid";
     final public static String FIND_ROOMS = "find-rooms";
-    final public static String FIND_ROOMS_BY_CREATOR_UUID = "find-rooms-by-creator-uuid";
+
+    final public static String GENERAL_ROOM_NAME = "General";
 
     private Logger logger;
     private MongoDataStore mongoDataStore;
@@ -94,7 +95,7 @@ public class DataStoreVerticle extends AbstractVerticle {
 
     private void initData(Handler<AsyncResult<Void>> handler) {
         /* creator is null */
-        findCreateRoomByName(new JsonObject().put("name", "general"), asyncResult -> {
+        findCreateRoomByName(new JsonObject().put("name", GENERAL_ROOM_NAME), asyncResult -> {
             if (asyncResult.failed())
                 handler.handle(Future.failedFuture(asyncResult.cause()));
 
@@ -124,6 +125,19 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 JsonObject reply = new JsonObject().put("result",
                                         Objects.isNull(user) ? null : JsonObject.mapFrom(user));
                                 logger.info("{} {} := {}", FIND_CREATE_USER_BY_EMAIL, params, reply);
+                                msg.reply(reply);
+                            });
+                            break;
+
+                        case FIND_CREATE_ROOM_BY_NAME:
+                            findCreateRoomByName(params, asyncResult -> {
+                                if (asyncResult.failed())
+                                    throw new RuntimeException(asyncResult.cause());
+
+                                final RoomMapper room = asyncResult.result();
+                                JsonObject reply = new JsonObject().put("result",
+                                        Objects.isNull(room) ? null : JsonObject.mapFrom(room));
+                                logger.info("{} {} := {}", FIND_CREATE_ROOM_BY_NAME, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -165,21 +179,6 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 JsonObject reply = new JsonObject().put("result",
                                         new JsonObject().put("rooms", rooms));
                                 logger.info("{} {} := {}", FIND_ROOMS, params, reply);
-                                msg.reply(reply);
-                            });
-                            break;
-
-                        case FIND_ROOMS_BY_CREATOR_UUID:
-                            findRoomsByCreatorUUID(params, asyncResult -> {
-                                if (asyncResult.failed())
-                                    throw new RuntimeException(asyncResult.cause());
-
-                                /* lists of objects need to be explicitly mapped to an array of of json objects */
-                                final JsonArray rooms = new JsonArray(asyncResult.result()
-                                        .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
-                                JsonObject reply = new JsonObject().put("result",
-                                        new JsonObject().put("rooms", rooms));
-                                logger.info("{} {} := {}", FIND_ROOMS_BY_CREATOR_UUID, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -312,7 +311,6 @@ public class DataStoreVerticle extends AbstractVerticle {
 
     private void findRoomByUUID(JsonObject params, Handler<AsyncResult<RoomMapper>> handler) {
         /* fetch params */
-        logger.info(params);
         String uuid = params.getString("uuid");
 
         IQuery<RoomMapper> query = mongoDataStore.createQuery(RoomMapper.class);
@@ -327,16 +325,6 @@ public class DataStoreVerticle extends AbstractVerticle {
         QueryHelper.executeToList(query, handler);
     }
 
-    private void findRoomsByCreatorUUID(JsonObject params, Handler<AsyncResult<List<RoomMapper>>> handler) {
-        /* fetch params */
-        String creatorUUID = params.getString("creatorUUID");
-
-        IQuery<RoomMapper> query = mongoDataStore.createQuery(RoomMapper.class);
-        query.setSearchCondition(ISearchCondition.isEqual("creator", creatorUUID));
-
-        QueryHelper.executeToList(query, handler);
-    }
-    
     private void recordMessage(JsonObject params, Handler<AsyncResult<MessageMapper>> handler) {
         /* fetch params */
         UserMapper user = params.getJsonObject("user").mapTo(UserMapper.class);

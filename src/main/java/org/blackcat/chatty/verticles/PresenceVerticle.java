@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// TODO: integrate configuration
 public class PresenceVerticle extends AbstractVerticle {
 
     final public static String ADDRESS = "webchat.presence";
@@ -63,7 +62,7 @@ public class PresenceVerticle extends AbstractVerticle {
                 /* msg dispatch */
                 if (queryType.equals(UPDATE_PRESENCE)) {
                     updateUserPresence(params, done -> {
-                        logger.info("Received presence update message: {}",
+                        logger.debug("Received presence update message: {}",
                                 params.toString());
                     });
                 } else {
@@ -88,6 +87,8 @@ public class PresenceVerticle extends AbstractVerticle {
 
     private void initPeriodicUpdates(Handler<Void> handler) {
         EventBus eventBus = vertx.eventBus();
+
+        /* setting up presence broadcast */
         vertx.setPeriodic(PRESENCE_BROADCAST_INTERVAL, tick -> {
             redisClient.keys("*", arrayAsyncResult -> {
                 if (arrayAsyncResult.succeeded()) {
@@ -151,6 +152,7 @@ public class PresenceVerticle extends AbstractVerticle {
             });
         });
 
+        /* setting up room list broadcast */
         vertx.setPeriodic(ROOMLIST_BROADCAST_INTERVAL, tick -> {
             Queries.findRooms(vertx, rooms -> {
                 eventBus.publish("webchat.rooms", new JsonObject().put("rooms", new JsonArray(rooms
@@ -168,7 +170,7 @@ public class PresenceVerticle extends AbstractVerticle {
 
         String key = userID + ":" + roomID;
         redisClient.psetex(key, PRESENCE_PERSISTENCE_DURATION, "", done -> {
-            logger.info(key);
+            logger.debug("Key {}", key);
             handler.handle(null);
         });
     }

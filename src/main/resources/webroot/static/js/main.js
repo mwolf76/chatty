@@ -102,6 +102,15 @@ window.WebChat.Channel = (function() {
 
             document.getElementById("user").focus();
         })
+
+        /* add collections */
+        $('#commit-create-room')
+            .on('click', function (event) {
+                var roomName = $('#additional-room-input').val();
+                putRoom(roomName, function() {
+                    console.log('New room created successfully.');
+                });
+            });
     };
 
     function appendUser(email) {
@@ -119,9 +128,32 @@ window.WebChat.Channel = (function() {
 
         var entry = document.createElement('li');
         entry.className += ' list-group-item';
-        entry.appendChild(document.createTextNode(room.name));
 
+        var anchor = document.createElement('a');
+        anchor.href = '/protected/rooms/' + room.uuid;
+
+        var text = document.createTextNode(room.name);
+        anchor.appendChild(text);
+        entry.appendChild(anchor);
         list.appendChild(entry);
+    }
+
+
+    /*** ajax helpers ***/
+    function defaultErrorCallback(jqXHR, textStatus, errorThrown) {
+        console.warn(jqXHR.responseText);
+    }
+
+    function putRoom(roomName, successCallback, errorCallback) {
+        $.ajax({
+            type: "PUT",
+            url: "/protected/new-room",
+            data: {
+                roomName: roomName
+            },
+            success: successCallback,
+            error: errorCallback || defaultErrorCallback
+        });
     }
 
     return {

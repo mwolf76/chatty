@@ -54,12 +54,14 @@ $(document).ready(function() {
     </div>
 </div>
 <div class="row" style="margin-right: -4px; !important">
-    <div class="col-sm-12">
+    <div class="col-sm-2"></div>
+    <div class="col-sm-8">
         <textarea id="user" class="form-control"></textarea>
     </div>
+    <div class="col-sm-2"></div>
 </div>
 
-<!-- Add resource modal -->
+<!-- Add room modal -->
 <div id="add-room-modal" class="modal fade">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -69,12 +71,12 @@ $(document).ready(function() {
             </div>
             <div class="modal-body">
                 <p>Enter a name for the new room and click <strong>Commit</strong> to apply changes.</p>
-                <input id="additional-collection-room-input" class="form-control" type="text"
+                <input id="additional-room-input" class="form-control" type="text"
                                placeholder="Enter new room name ...">
                 <br/>
-                <label id="commit-additional-collection-room" class="btn btn-primary"
-                       for="commit-added-collection-room">
-                    <input id="commit-added-collection-room" type="button" class="hidden"
+                <label id="commit-collection-room" class="btn btn-primary"
+                       for="commit-create-room">
+                    <input id="commit-create-room" type="button" class="hidden"
                            value="you-wont-see-me">
                     Commit
                 </label>
