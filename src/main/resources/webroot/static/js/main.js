@@ -5,6 +5,7 @@ window.WebChat.Channel = (function() {
     var eventBus;
     var userID;
     var roomID;
+
     var usersMap;
 
     /**
@@ -12,16 +13,6 @@ window.WebChat.Channel = (function() {
      *
      * @param {Object} params
      */
-    function appendUser(email) {
-        var list = document.getElementById('partakers');
-
-        var entry = document.createElement('li');
-        entry.className += ' list-group-item';
-        entry.appendChild(document.createTextNode(email));
-
-        list.appendChild(entry);
-    }
-
     var init = function(params) {
 
         eventBus = new EventBus("/eventbus/");
@@ -57,7 +48,14 @@ window.WebChat.Channel = (function() {
                 });
             });
 
-            /* presence heartbeat */
+            eventBus.registerHandler("webchat.rooms", function (err, msg) {
+                $('#rooms').html('');
+                _.each(msg.body.rooms, function(room) {
+                    appendRoom(room);
+                });
+            });
+
+            /* presence heartbeat (500 ms) */
             setInterval(function() {
                 eventBus.publish("webchat.presence", {
                     type: 'update-presence',
@@ -66,11 +64,12 @@ window.WebChat.Channel = (function() {
                         roomID: roomID
                     }
                 });
-            }, 5000);
+            }, 500);
         };
 
         userID = params.userID;
         roomID = params.roomID;
+
         usersMap = {};
 
         $('#user').keyup(function (event) {
@@ -104,6 +103,26 @@ window.WebChat.Channel = (function() {
             document.getElementById("user").focus();
         })
     };
+
+    function appendUser(email) {
+        var list = document.getElementById('partakers');
+
+        var entry = document.createElement('li');
+        entry.className += ' list-group-item';
+        entry.appendChild(document.createTextNode(email));
+
+        list.appendChild(entry);
+    }
+
+    function appendRoom(room) {
+        var list = document.getElementById('rooms');
+
+        var entry = document.createElement('li');
+        entry.className += ' list-group-item';
+        entry.appendChild(document.createTextNode(room.name));
+
+        list.appendChild(entry);
+    }
 
     return {
         'init': init

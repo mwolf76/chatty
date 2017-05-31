@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public final class Queries {
 
@@ -29,7 +30,7 @@ public final class Queries {
                 .put("type", DataStoreVerticle.FIND_CREATE_USER_BY_EMAIL)
                 .put("params", new JsonObject()
                         .put("email", email));
-
+        logger.info(query);
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
             if (reply.succeeded()) {
                 JsonObject obj = (JsonObject) reply.result().body();
@@ -52,7 +53,7 @@ public final class Queries {
                 .put("type", DataStoreVerticle.FIND_CREATE_ROOM_BY_NAME)
                 .put("params", new JsonObject()
                         .put("name", name));
-
+        logger.info(query);
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
             if (reply.succeeded()) {
                 JsonObject obj = (JsonObject) reply.result().body();
@@ -75,7 +76,7 @@ public final class Queries {
                 .put("type", DataStoreVerticle.FIND_USER_BY_UUID)
                 .put("params", new JsonObject()
                         .put("uuid", uuid));
-
+        logger.info(query);
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
             if (reply.succeeded()) {
                 JsonObject obj = (JsonObject) reply.result().body();
@@ -94,26 +95,48 @@ public final class Queries {
      * @param handler
      */
     public static void findRoomByUUID(Vertx vertx, String uuid, Handler<RoomMapper> handler) {
-        JsonObject query = new JsonObject()
-                .put("type", DataStoreVerticle.FIND_ROOM_BY_UUID)
-                .put("params", new JsonObject()
-                        .put("uuid", uuid));
+        if (uuid.isEmpty()) {
+            getGeneralRoomUUID(vertx, generalUUID -> {
+                JsonObject query = new JsonObject()
+                        .put("type", DataStoreVerticle.FIND_ROOM_BY_UUID)
+                        .put("params", new JsonObject()
+                                .put("uuid", generalUUID));
 
-        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject obj = (JsonObject) reply.result().body();
-                if (! Objects.isNull(obj)) {
-                    RoomMapper roomMapper = obj.getJsonObject("result").mapTo(RoomMapper.class);
-                    handler.handle(roomMapper);
-                } else handler.handle(null);
-            }
-        });
+                logger.info(query);
+                vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+                    if (reply.succeeded()) {
+                        JsonObject obj = (JsonObject) reply.result().body();
+                        if (! Objects.isNull(obj)) {
+                            RoomMapper roomMapper = obj.getJsonObject("result").mapTo(RoomMapper.class);
+                            handler.handle(roomMapper);
+                        } else handler.handle(null);
+                    }
+                });
+            });
+        } else {
+            JsonObject query = new JsonObject()
+                    .put("type", DataStoreVerticle.FIND_ROOM_BY_UUID)
+                    .put("params", new JsonObject()
+                            .put("uuid", uuid));
+
+            logger.info(query);
+            vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+                if (reply.succeeded()) {
+                    JsonObject obj = (JsonObject) reply.result().body();
+                    if (! Objects.isNull(obj)) {
+                        RoomMapper roomMapper = obj.getJsonObject("result").mapTo(RoomMapper.class);
+                        handler.handle(roomMapper);
+                    } else handler.handle(null);
+                }
+            });
+        }
     }
 
     public static void getGeneralRoomUUID(Vertx vertx, Handler<String> handler) {
         JsonObject query = new JsonObject()
                 .put("type", DataStoreVerticle.GET_GENERAL_ROOM_UUID);
 
+        logger.info(query);
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
             if (reply.succeeded()) {
                 JsonObject obj = (JsonObject) reply.result().body();
@@ -149,6 +172,7 @@ public final class Queries {
                         .put("timeStamp", timeStamp.toString())
                         .put("room", JsonObject.mapFrom(roomMapper)));
 
+        logger.info(query);
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
             if (reply.succeeded()) {
                 JsonObject body = (JsonObject) reply.result().body();
@@ -177,6 +201,7 @@ public final class Queries {
                 .put("params", new JsonObject()
                         .put("roomUUID", roomMapper.getUuid()));
 
+        logger.info(query);
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
             if (reply.succeeded()) {
                 JsonObject body = (JsonObject) reply.result().body();
@@ -189,6 +214,32 @@ public final class Queries {
                     messages.add(messageMapper);
                 }
                 handler.handle(messages);
+            } else {
+                final Throwable cause = reply.cause();
+                logger.error(cause.toString());
+            }
+        });
+    }
+
+    /**
+     * Find all defined rooms.
+     *
+     * @param handler
+     */
+    public static void findRooms(Vertx vertx, Handler<List<RoomMapper>> handler) {
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.FIND_ROOMS)
+                .put("params", new JsonObject());
+
+        logger.info(query);
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.succeeded()) {
+                JsonObject body = (JsonObject) reply.result().body();
+                final List<JsonObject> jsonObjects =
+                        body.getJsonObject("result").getJsonArray("rooms").getList();
+
+                handler.handle(jsonObjects.stream().map(obj -> obj.mapTo(RoomMapper.class))
+                        .collect(Collectors.toList()));
             } else {
                 final Throwable cause = reply.cause();
                 logger.error(cause.toString());

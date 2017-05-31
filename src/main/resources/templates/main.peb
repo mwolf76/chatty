@@ -1,5 +1,5 @@
 {% extends "base.peb" %}
-{% block title %}Chatty - Instant Messaging for work & leisure{% endblock %}
+{% block title %}Chatty - Instant Messaging for work & leisure - {{ context.get("roomName") }}{% endblock %}
 
 {% block pagestyle %}
 <link rel="stylesheet" href="/static/css/main.css">
@@ -16,8 +16,7 @@
 $(document).ready(function() {
   WebChat.Channel.init({
     userID: '{{ context.get("userID") }}',
-    roomID: '{{ context.get("roomID") }}',
-    historyURL: '{{ context.get("historyURL") }}'
+    roomID: '{{ context.get("roomID") }}'
   });
 });
 </script>
@@ -35,16 +34,55 @@ $(document).ready(function() {
     </div>
 </div>
 <div class="row" style="margin-right: -4px; !important">
-    <div class="col-sm-4">
+    <div class="col-sm-12">
+        <a id="plus-button" href="#add-room-modal" class="btn btn-primary" data-toggle="modal"><span
+                class="glyphicon glyphicon-plus" aria-hidden="true"></span></a>
+        <a id="download-button" href="download" class="btn btn-primary" download><span
+                class="glyphicon glyphicon-cloud-download" aria-hidden="true"></span></a>
+    </div>
+</div>
+<br/>
+<div class="row" style="margin-right: -4px; !important">
+    <div class="col-sm-2">
         <ul id="partakers" class="list-group"></ul>
     </div>
     <div class="col-sm-8">
         <textarea id="room" class="form-control" rows="20" readonly></textarea>
     </div>
+    <div class="col-sm-2">
+        <ul id="rooms" class="list-group"></ul>
+    </div>
 </div>
 <div class="row" style="margin-right: -4px; !important">
     <div class="col-sm-12">
         <textarea id="user" class="form-control"></textarea>
+    </div>
+</div>
+
+<!-- Add resource modal -->
+<div id="add-room-modal" class="modal fade">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title">New room</h4>
+            </div>
+            <div class="modal-body">
+                <p>Enter a name for the new room and click <strong>Commit</strong> to apply changes.</p>
+                <input id="additional-collection-room-input" class="form-control" type="text"
+                               placeholder="Enter new room name ...">
+                <br/>
+                <label id="commit-additional-collection-room" class="btn btn-primary"
+                       for="commit-added-collection-room">
+                    <input id="commit-added-collection-room" type="button" class="hidden"
+                           value="you-wont-see-me">
+                    Commit
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

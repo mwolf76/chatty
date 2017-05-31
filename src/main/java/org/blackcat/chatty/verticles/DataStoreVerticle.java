@@ -8,9 +8,12 @@ import de.braintags.vertx.jomnigate.dataaccess.write.IWriteEntry;
 import de.braintags.vertx.jomnigate.dataaccess.write.IWriteResult;
 import de.braintags.vertx.jomnigate.init.DataStoreSettings;
 import de.braintags.vertx.jomnigate.mongo.MongoDataStore;
+import de.braintags.vertx.jomnigate.util.QueryHelper;
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -21,10 +24,10 @@ import org.blackcat.chatty.mappers.MessageMapper;
 import org.blackcat.chatty.mappers.RoomMapper;
 import org.blackcat.chatty.mappers.UserMapper;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class DataStoreVerticle extends AbstractVerticle {
 
@@ -40,6 +43,8 @@ public class DataStoreVerticle extends AbstractVerticle {
     final public static String FETCH_MESSAGES = "fetch-messages";
 
     final public static String GET_GENERAL_ROOM_UUID = "get-general-room-uuid";
+    final public static String FIND_ROOMS = "find-rooms";
+    final public static String FIND_ROOMS_BY_CREATOR_UUID = "find-rooms-by-creator-uuid";
 
     private Logger logger;
     private MongoDataStore mongoDataStore;
@@ -71,57 +76,13 @@ public class DataStoreVerticle extends AbstractVerticle {
             MongoClient mongoClient = MongoClient.createShared(vertx, mongodbConfig);
             mongoDataStore = new MongoDataStore(vertx, mongoClient, new JsonObject(), dataStoreSettings);
 
-            vertx.eventBus()
-                    .consumer(ADDRESS, msg -> {
-                        JsonObject obj = (JsonObject) msg.body();
-                        String queryType = obj.getString("type");
-                        JsonObject params = obj.getJsonObject("params");
-
-                        /* msg dispatch */
-                        if (queryType.equals(FIND_CREATE_USER_BY_EMAIL)) {
-                            findCreateUserByEmail(params, user -> {
-                                msg.reply(new JsonObject().put("result",
-                                        Objects.isNull(user) ? null : JsonObject.mapFrom(user)));
-                            });
-                        } else if (queryType.equals(FIND_USER_BY_UUID)) {
-                            findUserByUUID(params, user -> {
-                                msg.reply(new JsonObject().put("result",
-                                        Objects.isNull(user) ? null : JsonObject.mapFrom(user)));
-                            });
-                        } else if (queryType.equals(FIND_ROOM_BY_UUID)) {
-                            findRoomByUUID(params, room -> {
-                                msg.reply(new JsonObject().put("result",
-                                        Objects.isNull(room) ? null : JsonObject.mapFrom(room)));
-                            });
-                        } else if (queryType.equals(RECORD_MESSAGE)) {
-                            recordMessage(params, message -> {
-                                msg.reply(new JsonObject().put("result",
-                                        Objects.isNull(message) ? null : JsonObject.mapFrom(message)));
-                            });
-                        } else if (queryType.equals(FETCH_MESSAGES)) {
-                            fetchMessages(params, messages -> {
-                                JsonArray jsonArray = new JsonArray();
-                                for (MessageMapper message: messages) {
-                                    jsonArray.add(JsonObject.mapFrom(message));
-                                }
-
-                                msg.reply(new JsonObject().put("result",
-                                        new JsonObject().put("messages", jsonArray)));
-                            });
-                        } else if (queryType.equals(GET_GENERAL_ROOM_UUID)) {
-                            msg.reply(new JsonObject()
-                                    .put("result", new JsonObject()
-                                            .put("uuid", this.generalRoomUUID)));
-                        } else {
-                            logger.error("Unsupported query type: {}", queryType);
-                        }
-                    });
-
             future.complete();
         }, res -> {
             if (res.succeeded()) {
-                initData(done -> {
-                    startFuture.complete();
+                initData(_1 -> {
+                    setupQueryDispatch(_2 -> {
+                        startFuture.complete();
+                    });
                 });
             } else {
                 Throwable cause = res.cause();
@@ -131,45 +92,160 @@ public class DataStoreVerticle extends AbstractVerticle {
         });
     }
 
-    private void initData(Handler<Void> handler) {
-        findCreateRoomByName(new JsonObject().put("name", "general"), room -> {
+    private void initData(Handler<AsyncResult<Void>> handler) {
+        /* creator is null */
+        findCreateRoomByName(new JsonObject().put("name", "general"), asyncResult -> {
+            if (asyncResult.failed())
+                handler.handle(Future.failedFuture(asyncResult.cause()));
+
+            final RoomMapper room = asyncResult.result();
+
             logger.info("General room is {}", room);
             generalRoomUUID = room.getUuid();
-            handler.handle(null);
+
+            handler.handle(null); /* done */
         });
     }
 
-    private void findCreateUserByEmail(JsonObject params, Handler<UserMapper> handler) {
+    private void setupQueryDispatch(Handler<AsyncResult<Void>> handler) {
+        vertx.eventBus()
+                .consumer(ADDRESS, msg -> {
+                    JsonObject obj = (JsonObject) msg.body();
+                    String queryType = obj.getString("type");
+                    JsonObject params = obj.getJsonObject("params");
+
+                    switch(queryType) {
+                        case FIND_CREATE_USER_BY_EMAIL:
+                            findCreateUserByEmail(params, asyncResult -> {
+                                if (asyncResult.failed())
+                                    throw new RuntimeException(asyncResult.cause());
+
+                                final UserMapper user = asyncResult.result();
+                                JsonObject reply = new JsonObject().put("result",
+                                        Objects.isNull(user) ? null : JsonObject.mapFrom(user));
+                                logger.info("{} {} := {}", FIND_CREATE_USER_BY_EMAIL, params, reply);
+                                msg.reply(reply);
+                            });
+                            break;
+
+                        case FIND_USER_BY_UUID:
+                            findUserByUUID(params, asyncResult -> {
+                                if (asyncResult.failed())
+                                    throw new RuntimeException(asyncResult.cause());
+
+                                final UserMapper user = asyncResult.result();
+                                JsonObject reply = new JsonObject().put("result",
+                                        Objects.isNull(user) ? null : JsonObject.mapFrom(user));
+                                logger.info("{} {} := {}", FIND_USER_BY_UUID, params, reply);
+                                msg.reply(reply);
+                            });
+                            break;
+
+                        case FIND_ROOM_BY_UUID:
+                            findRoomByUUID(params,  asyncResult -> {
+                                if (asyncResult.failed())
+                                    throw new RuntimeException(asyncResult.cause());
+
+                                final RoomMapper room = asyncResult.result();
+                                JsonObject reply = new JsonObject().put("result",
+                                        Objects.isNull(room) ? null : JsonObject.mapFrom(room));
+                                logger.info("{} {} := {}", FIND_ROOM_BY_UUID, params, reply);
+                                msg.reply(reply);
+                            });
+                            break;
+
+                        case FIND_ROOMS:
+                            findRooms(params, asyncResult -> {
+                                if (asyncResult.failed())
+                                    throw new RuntimeException(asyncResult.cause());
+
+                                /* lists of objects need to be explicitly mapped to an array of of json objects */
+                                final JsonArray rooms = new JsonArray(asyncResult.result()
+                                        .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
+                                JsonObject reply = new JsonObject().put("result",
+                                        new JsonObject().put("rooms", rooms));
+                                logger.info("{} {} := {}", FIND_ROOMS, params, reply);
+                                msg.reply(reply);
+                            });
+                            break;
+
+                        case FIND_ROOMS_BY_CREATOR_UUID:
+                            findRoomsByCreatorUUID(params, asyncResult -> {
+                                if (asyncResult.failed())
+                                    throw new RuntimeException(asyncResult.cause());
+
+                                /* lists of objects need to be explicitly mapped to an array of of json objects */
+                                final JsonArray rooms = new JsonArray(asyncResult.result()
+                                        .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
+                                JsonObject reply = new JsonObject().put("result",
+                                        new JsonObject().put("rooms", rooms));
+                                logger.info("{} {} := {}", FIND_ROOMS_BY_CREATOR_UUID, params, reply);
+                                msg.reply(reply);
+                            });
+                            break;
+
+                        case RECORD_MESSAGE:
+                            recordMessage(params, asyncResult -> {
+                                if (asyncResult.failed())
+                                    throw new RuntimeException(asyncResult.cause());
+
+                                final MessageMapper message = asyncResult.result();
+                                JsonObject reply = new JsonObject().put("result",
+                                        Objects.isNull(message) ? null : JsonObject.mapFrom(message));
+                                logger.info("{} {} := {}", RECORD_MESSAGE, params, reply);
+                                msg.reply(reply);
+                            });
+                            break;
+
+                        case FETCH_MESSAGES:
+                            fetchMessages(params, asyncResult -> {
+                                if (asyncResult.failed())
+                                    throw new RuntimeException(asyncResult.cause());
+
+                                    /* lists of objects need to be explicitly mapped to a list of json objects */
+                                final JsonArray messages =  new JsonArray(asyncResult.result()
+                                        .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
+
+                                JsonObject reply = new JsonObject().put("result",
+                                        new JsonObject().put("messages", messages));
+                                logger.info("{} {} := {}", FETCH_MESSAGES, params, reply);
+                                msg.reply(reply);
+                            });
+                            break;
+
+                        case GET_GENERAL_ROOM_UUID:
+                            JsonObject reply = new JsonObject()
+                                    .put("result", new JsonObject()
+                                            .put("uuid", this.generalRoomUUID));
+                            logger.info("{} := {}", GET_GENERAL_ROOM_UUID, reply);
+                            msg.reply(reply);
+                            break;
+
+                        default:
+                            logger.error("Ignoring unsupported query type: {}", queryType);
+                    } /* switch() */
+                });
+
+        handler.handle(null); /* done */
+    } /* setupQueryDispatch() */
+
+    private void findCreateUserByEmail(JsonObject params, Handler<AsyncResult<UserMapper>> handler) {
 
         /* fetch params */
         String email = params.getString("email");
 
         IQuery<UserMapper> query = mongoDataStore.createQuery(UserMapper.class);
         query.setSearchCondition(ISearchCondition.isEqual("email", email));
-        query.execute(queryAsyncResult -> {
-            if (queryAsyncResult.failed()) {
-                Throwable cause = queryAsyncResult.cause();
 
-                logger.error(cause);
-                throw new RuntimeException(cause);
+        QueryHelper.executeToFirstRecord(query, false, asyncResult -> {
+            if (asyncResult.failed()) {
+                handler.handle(Future.failedFuture(asyncResult.cause()));
             } else {
-                IQueryResult<UserMapper> queryResult = queryAsyncResult.result();
-                if (!queryResult.isEmpty()) {
-                    queryResult.iterator().next(nextAsyncResult -> {
-                        if (nextAsyncResult.failed()) {
-                            Throwable cause = nextAsyncResult.cause();
-
-                            logger.error(cause);
-                            throw new RuntimeException(cause);
-                        } else {
-                            UserMapper userMapper = nextAsyncResult.result();
-
-                            logger.debug("Found matching user for {}: {}", email, userMapper);
-                            handler.handle(userMapper);
-                        }
-                    });
+                final UserMapper result = asyncResult.result();
+                if (result != null) {
+                    handler.handle(Future.succeededFuture(result));
                 } else {
-                    /* User does not exist. create it */
+                    /* User does not exist. Create a new record. */
                     UserMapper userMapper = new UserMapper();
                     userMapper.setUuid(UUID.randomUUID().toString());
                     userMapper.setEmail(email);
@@ -177,18 +253,11 @@ public class DataStoreVerticle extends AbstractVerticle {
                     IWrite<UserMapper> write = mongoDataStore.createWrite(UserMapper.class);
                     write.add(userMapper);
 
-                    write.save(result -> {
-                        if (result.failed()) {
-                            Throwable cause = result.cause();
-
-                            logger.error(cause.toString());
-                            throw new RuntimeException(cause);
+                    write.save(writeAsyncResult -> {
+                        if (writeAsyncResult.failed()) {
+                            handler.handle(Future.failedFuture(writeAsyncResult.cause()));
                         } else {
-                            IWriteResult writeResult = result.result();
-                            IWriteEntry entry = writeResult.iterator().next();
-
-                            logger.debug("Created new userMapper for {}: {}", email, entry.getStoreObject());
-                            handler.handle(userMapper);
+                            handler.handle(Future.succeededFuture(userMapper));
                         }
                     });
                 }
@@ -196,38 +265,22 @@ public class DataStoreVerticle extends AbstractVerticle {
         });
     }
 
-    private void findCreateRoomByName(JsonObject params, Handler<RoomMapper> handler) {
-
+    private void findCreateRoomByName(JsonObject params, Handler<AsyncResult<RoomMapper>> handler) {
         /* fetch params */
         String name = params.getString("name");
 
         IQuery<RoomMapper> query = mongoDataStore.createQuery(RoomMapper.class);
         query.setSearchCondition(ISearchCondition.isEqual("name", name));
 
-        query.execute(queryAsyncResult -> {
-            if (queryAsyncResult.failed()) {
-                Throwable cause = queryAsyncResult.cause();
-
-                logger.error(cause);
-                throw new RuntimeException(cause);
+        QueryHelper.executeToFirstRecord(query, false, asyncResult -> {
+            if (asyncResult.failed()) {
+                handler.handle(Future.failedFuture(asyncResult.cause()));
             } else {
-                IQueryResult<RoomMapper> queryResult = queryAsyncResult.result();
-                if (!queryResult.isEmpty()) {
-                    queryResult.iterator().next(nextAsyncResult -> {
-                        if (nextAsyncResult.failed()) {
-                            Throwable cause = nextAsyncResult.cause();
-
-                            logger.error(cause);
-                            throw new RuntimeException(cause);
-                        } else {
-                            RoomMapper roomMapper = nextAsyncResult.result();
-
-                            logger.debug("Found matching room for {}: {}", name, roomMapper);
-                            handler.handle(roomMapper);
-                        }
-                    });
+                final RoomMapper result = asyncResult.result();
+                if (result != null) {
+                    handler.handle(Future.succeededFuture(result));
                 } else {
-                    /* Room does not exist. create it */
+                    /* Room does not exist. Create a new record. */
                     RoomMapper roomMapper = new RoomMapper();
                     roomMapper.setUuid(UUID.randomUUID().toString());
                     roomMapper.setName(name);
@@ -235,18 +288,11 @@ public class DataStoreVerticle extends AbstractVerticle {
                     IWrite<RoomMapper> write = mongoDataStore.createWrite(RoomMapper.class);
                     write.add(roomMapper);
 
-                    write.save(result -> {
-                        if (result.failed()) {
-                            Throwable cause = result.cause();
-
-                            logger.error(cause.toString());
-                            throw new RuntimeException(cause);
+                    write.save(writeAsyncResult -> {
+                        if (writeAsyncResult.failed()) {
+                            handler.handle(Future.failedFuture(writeAsyncResult.cause()));
                         } else {
-                            IWriteResult writeResult = result.result();
-                            IWriteEntry entry = writeResult.iterator().next();
-
-                            logger.debug("Created new room for {}: {}", name, roomMapper);
-                            handler.handle(roomMapper);
+                            handler.handle(Future.succeededFuture(roomMapper));
                         }
                     });
                 }
@@ -254,86 +300,44 @@ public class DataStoreVerticle extends AbstractVerticle {
         });
     }
 
-    private void findUserByUUID(JsonObject params, Handler<UserMapper> handler) {
-
+    private void findUserByUUID(JsonObject params, Handler<AsyncResult<UserMapper>> handler) {
         /* fetch params */
         String uuid = params.getString("uuid");
 
         IQuery<UserMapper> query = mongoDataStore.createQuery(UserMapper.class);
         query.setSearchCondition(ISearchCondition.isEqual("uuid", uuid));
 
-        query.execute(queryAsyncResult -> {
-            if (queryAsyncResult.failed()) {
-                Throwable cause = queryAsyncResult.cause();
-
-                logger.error(cause);
-                throw new RuntimeException(cause);
-            } else {
-                IQueryResult<UserMapper> queryResult = queryAsyncResult.result();
-                if (!queryResult.isEmpty()) {
-                    queryResult.iterator().next(nextAsyncResult -> {
-                        if (nextAsyncResult.failed()) {
-                            Throwable cause = nextAsyncResult.cause();
-
-                            logger.error(cause);
-                            throw new RuntimeException(cause);
-                        } else {
-                            UserMapper userMapper = nextAsyncResult.result();
-
-                            logger.debug("Found matching user for {}: {}", uuid, userMapper);
-                            handler.handle(userMapper);
-                        }
-                    });
-                } else {
-                    /* User does not exist. */
-                    logger.warn("No user found for {}", uuid);
-                    handler.handle(null);
-                }
-            }
-        });
+        QueryHelper.executeToFirstRecord(query, false, handler);
     }
 
-    private void findRoomByUUID(JsonObject params, Handler<RoomMapper> handler) {
-
+    private void findRoomByUUID(JsonObject params, Handler<AsyncResult<RoomMapper>> handler) {
         /* fetch params */
+        logger.info(params);
         String uuid = params.getString("uuid");
 
         IQuery<RoomMapper> query = mongoDataStore.createQuery(RoomMapper.class);
         query.setSearchCondition(ISearchCondition.isEqual("uuid", uuid));
 
-        query.execute(queryAsyncResult -> {
-            if (queryAsyncResult.failed()) {
-                Throwable cause = queryAsyncResult.cause();
+        QueryHelper.executeToFirstRecord(query, false, handler);
+    }
 
-                logger.error(cause);
-                throw new RuntimeException(cause);
-            } else {
-                IQueryResult<RoomMapper> queryResult = queryAsyncResult.result();
-                if (!queryResult.isEmpty()) {
-                    queryResult.iterator().next(nextAsyncResult -> {
-                        if (nextAsyncResult.failed()) {
-                            Throwable cause = nextAsyncResult.cause();
+    private void findRooms(JsonObject params, Handler<AsyncResult<List<RoomMapper>>> handler) {
+        /* no params */
+        IQuery<RoomMapper> query = mongoDataStore.createQuery(RoomMapper.class);
+        QueryHelper.executeToList(query, handler);
+    }
 
-                            logger.error(cause);
-                            throw new RuntimeException(cause);
-                        } else {
-                            RoomMapper roomMapper = nextAsyncResult.result();
+    private void findRoomsByCreatorUUID(JsonObject params, Handler<AsyncResult<List<RoomMapper>>> handler) {
+        /* fetch params */
+        String creatorUUID = params.getString("creatorUUID");
 
-                            logger.debug("Found matching room for {}: {}", uuid, roomMapper);
-                            handler.handle(roomMapper);
-                        }
-                    });
-                } else {
-                    /* Room does not exist. */
-                    logger.warn("No room found for {}", uuid);
-                    handler.handle(null);
-                }
-            }
-        });
+        IQuery<RoomMapper> query = mongoDataStore.createQuery(RoomMapper.class);
+        query.setSearchCondition(ISearchCondition.isEqual("creator", creatorUUID));
+
+        QueryHelper.executeToList(query, handler);
     }
     
-    private void recordMessage(JsonObject params, Handler<MessageMapper> handler) {
-
+    private void recordMessage(JsonObject params, Handler<AsyncResult<MessageMapper>> handler) {
         /* fetch params */
         UserMapper user = params.getJsonObject("user").mapTo(UserMapper.class);
         String messageText = params.getString("messageText");
@@ -351,51 +355,28 @@ public class DataStoreVerticle extends AbstractVerticle {
 
         write.save(result -> {
             if (result.failed()) {
-                Throwable cause = result.cause();
-
-                logger.error(cause.toString());
-                throw new RuntimeException(cause);
+                handler.handle(Future.failedFuture(result.cause()));
             } else {
-                IWriteResult writeResult = result.result();
-                IWriteEntry entry = writeResult.iterator().next();
-
                 logger.info("Recorded new message: {}", messageMapper.toString());
-                handler.handle(messageMapper);
+                handler.handle(Future.succeededFuture(messageMapper));
             }
         });
     }
 
-    private void fetchMessages(JsonObject params, Handler<List<MessageMapper>> handler) {
-
+    private void fetchMessages(JsonObject params, Handler<AsyncResult<List<MessageMapper>>> handler) {
         /* fetch params */
         String roomUUID = params.getString("roomUUID");
-        findRoomByUUID(new JsonObject().put("uuid", roomUUID), room -> {
+        findRoomByUUID(new JsonObject().put("uuid", roomUUID), asyncResult -> {
 
-            IQuery<MessageMapper> query = mongoDataStore.createQuery(MessageMapper.class);
-            query.setSearchCondition(ISearchCondition.isEqual("room", room.getUuid()));
+            if (asyncResult.failed()) {
+                handler.handle(Future.failedFuture(asyncResult.cause()));
+            } else {
+                final RoomMapper room = asyncResult.result();
+                IQuery<MessageMapper> query = mongoDataStore.createQuery(MessageMapper.class);
 
-            query.execute(queryAsyncResult -> {
-                if (queryAsyncResult.failed()) {
-                    Throwable cause = queryAsyncResult.cause();
-
-                    logger.error(cause);
-                    throw new RuntimeException(cause);
-                } else {
-                    IQueryResult<MessageMapper> queryResult = queryAsyncResult.result();
-                    queryResult.toArray(arrayAsyncResult -> {
-                        if (arrayAsyncResult.failed()) {
-                            Throwable cause = arrayAsyncResult.cause();
-
-                            logger.error(cause);
-                            throw new RuntimeException(cause);
-                        } else {
-                            Object[] objects = arrayAsyncResult.result();
-                            MessageMapper[] messages = Arrays.copyOf(objects, objects.length, MessageMapper[].class);
-                            handler.handle(Arrays.asList(messages));
-                        }
-                    });
-                }
-            });
+                query.setSearchCondition(ISearchCondition.isEqual("room", room.getUuid()));
+                QueryHelper.executeToList(query, handler);
+            }
         });
     }
 }

@@ -11,11 +11,13 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
 import io.vertx.redis.RedisOptions;
 import org.blackcat.chatty.conf.Configuration;
+import org.blackcat.chatty.mappers.Queries;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 // TODO: integrate configuration
 public class PresenceVerticle extends AbstractVerticle {
@@ -26,10 +28,11 @@ public class PresenceVerticle extends AbstractVerticle {
     final public static String UPDATE_PRESENCE = "update-presence";
 
     /* how long does a presence message persist? */
-    final private static int PRESENCE_PERSISTENCE_DURATION = 30000; /* ms */
+    final private static int PRESENCE_PERSISTENCE_DURATION = 2000; /* ms */
 
     /* how long between presence broadcast updates? */
-    final private static int PRESENCE_BROADCAST_INTERVAL = 2000; /* ms */
+    final private static int PRESENCE_BROADCAST_INTERVAL = 1000; /* ms */
+    final private static int ROOMLIST_BROADCAST_INTERVAL = 1000; /* ms */
 
     private Logger logger;
     private RedisClient redisClient;
@@ -85,7 +88,7 @@ public class PresenceVerticle extends AbstractVerticle {
 
     private void initPeriodicUpdates(Handler<Void> handler) {
         EventBus eventBus = vertx.eventBus();
-        vertx.setPeriodic(PRESENCE_BROADCAST_INTERVAL, id -> {
+        vertx.setPeriodic(PRESENCE_BROADCAST_INTERVAL, tick -> {
             redisClient.keys("*", arrayAsyncResult -> {
                 if (arrayAsyncResult.succeeded()) {
                     JsonArray jsonArray = arrayAsyncResult.result();
@@ -145,6 +148,13 @@ public class PresenceVerticle extends AbstractVerticle {
                         }
                     });
                 }
+            });
+        });
+
+        vertx.setPeriodic(ROOMLIST_BROADCAST_INTERVAL, tick -> {
+            Queries.findRooms(vertx, rooms -> {
+                eventBus.publish("webchat.rooms", new JsonObject().put("rooms", new JsonArray(rooms
+                        .stream().map(JsonObject::mapFrom).collect(Collectors.toList()))));
             });
         });
 

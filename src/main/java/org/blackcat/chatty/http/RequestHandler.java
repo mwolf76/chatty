@@ -25,20 +25,15 @@ import io.vertx.ext.web.templ.TemplateEngine;
 import org.blackcat.chatty.conf.Configuration;
 import org.blackcat.chatty.mappers.MessageMapper;
 import org.blackcat.chatty.mappers.Queries;
-import org.blackcat.chatty.mappers.RoomMapper;
-import org.blackcat.chatty.mappers.UserMapper;
 import org.blackcat.chatty.util.HtmlEscape;
-import org.blackcat.chatty.verticles.DataStoreVerticle;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.MessageFormat;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static java.time.format.DateTimeFormatter.ISO_INSTANT;
@@ -133,6 +128,13 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 .failureHandler(this::internalServerError);
     }
 
+    private String formatPlainMessage(MessageMapper messageMapper) {
+        return MessageFormat.format("{0} <{1}>: {2}",
+                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(
+                        Date.from(Instant.from(ISO_INSTANT.parse(messageMapper.getTimeStamp())))),
+                messageMapper.getAuthor().getEmail(), messageMapper.getText());
+    }
+
     private String formatMessage(MessageMapper messageMapper) {
         return MessageFormat.format("{0} &lt;{1}&gt;: {2}",
                 DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(
@@ -192,6 +194,11 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 .get("/protected/main")
                 .handler(this::main);
 
+        /* internal index handler */
+        router
+                .getWithRegex(".*/download")
+                .handler(this::download);
+
         // logout
         router
                 .route("/logout")
@@ -240,26 +247,55 @@ public class RequestHandler implements Handler<HttpServerRequest> {
     private void main(RoutingContext ctx) {
         String email = getSessionUserEmail(ctx);
 
+        Queries.getGeneralRoomUUID(vertx, roomUUID -> {
+            Queries.findRoomByUUID(vertx, roomUUID, room -> {
+                Queries.findCreateUserEntityByEmail(vertx, email, userMapper -> {
+                    ctx
+                            .put("userEmail", userMapper.getEmail())
+                            .put("userID", userMapper.getUuid())
+                            .put("roomID", room.getUuid())
+                            .put("roomName", room.getName());
+
+                    templateEngine.render(ctx, "templates/main", asyncResult -> {
+                        if (asyncResult.succeeded()) {
+                            Buffer result = asyncResult.result();
+                            ctx.response()
+                                    .putHeader(Headers.CONTENT_TYPE_HEADER, "text/html; charset=utf-8")
+                                    .putHeader(Headers.CONTENT_LENGTH_HEADER, String.valueOf(result.length()))
+                                    .end(result);
+                        } else {
+                            final Throwable cause = asyncResult.cause();
+                            logger.error(cause.toString());
+                            internalServerError(ctx);
+                        }
+                    });
+                });
+            });
+
+        });
+    }
+
+    private void download(RoutingContext ctx) {
+        String email = getSessionUserEmail(ctx);
+
+        Path requestPath = Paths.get(urlDecode(ctx.request().path())).getParent(); /* remove /download */
+        Path prefix = Paths.get("/protected");
+        String roomUID = prefix.relativize(requestPath).toString();
+
         Queries.findCreateUserEntityByEmail(vertx, email, userMapper -> {
 
-            Queries.getGeneralRoomUUID(vertx, roomUUID -> {
-                ctx
-                        .put("userEmail", userMapper.getEmail())
-                        .put("userID", userMapper.getUuid())
-                        .put("roomID", roomUUID);
+            Queries.findRoomByUUID(vertx, roomUID, roomMapper -> {
 
-                templateEngine.render(ctx, "templates/main", asyncResult -> {
-                    if (asyncResult.succeeded()) {
-                        Buffer result = asyncResult.result();
-                        ctx.response()
-                                .putHeader(Headers.CONTENT_TYPE_HEADER, "text/html; charset=utf-8")
-                                .putHeader(Headers.CONTENT_LENGTH_HEADER, String.valueOf(result.length()))
-                                .end(result);
-                    } else {
-                        final Throwable cause = asyncResult.cause();
-                        logger.error(cause.toString());
-                        internalServerError(ctx);
-                    }
+                /* TODO: check user authorization for this room, for now we assume we're good */
+                Queries.fetchMessages(vertx, userMapper, roomMapper, messages -> {
+
+                    final String fullText = messages.stream()
+                            .map(this::formatPlainMessage)
+                            .collect(Collectors.joining(""));
+
+                    ctx.response()
+                            .putHeader(Headers.CONTENT_TYPE_HEADER, "text/plain")
+                            .end(fullText);
                 });
             });
         });
