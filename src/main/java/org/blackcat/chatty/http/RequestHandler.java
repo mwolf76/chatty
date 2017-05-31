@@ -1,8 +1,7 @@
 package org.blackcat.chatty.http;
 
-import io.vertx.core.Handler;
-import io.vertx.core.MultiMap;
-import io.vertx.core.Vertx;
+import com.mitchellbosecke.pebble.PebbleEngine;
+import io.vertx.core.*;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.http.HttpServerRequest;
@@ -24,17 +23,18 @@ import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.templ.TemplateEngine;
 import org.blackcat.chatty.conf.Configuration;
 import org.blackcat.chatty.mappers.MessageMapper;
-import org.blackcat.chatty.mappers.Queries;
+import org.blackcat.chatty.mappers.RoomMapper;
+import org.blackcat.chatty.mappers.UserMapper;
 import org.blackcat.chatty.util.HtmlEscape;
+import org.blackcat.chatty.util.Utils;
+import org.blackcat.chatty.verticles.DataStoreVerticle;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.MessageFormat;
 import java.time.Instant;
-import java.util.Date;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.time.format.DateTimeFormatter.ISO_INSTANT;
@@ -80,21 +80,39 @@ public class RequestHandler implements Handler<HttpServerRequest> {
 
         // Register to listen for messages coming IN to the server
         final EventBus eventBus = vertx.eventBus();
-        eventBus.consumer("webchat.server").handler(message -> {
+        eventBus.consumer("webchat.server").handler(event -> {
+            JsonObject jsonObject = new JsonObject((String) event.body());
 
-            JsonObject jsonObject = new JsonObject((String) message.body());
             String userID = jsonObject.getString("userID");
             String roomID = jsonObject.getString("roomID");
             String text = jsonObject.getString("text");
 
-            Queries.findUserByUUID(vertx, userID, user -> {
-                Queries.findRoomByUUID(vertx, roomID, room -> {
-                    Queries.recordMessage(vertx, user, text, Instant.now(), room, messageMapper -> {
-                        eventBus.publish("webchat.client", new JsonObject()
-                                .put("roomID", roomID)
-                                .put("displayText", formatMessage(messageMapper)));
+            findUserByUUID(vertx, userID, userMapperAsyncResult -> {
+                if (userMapperAsyncResult.failed()) {
+                    logger.error(userMapperAsyncResult.cause().toString());
+                } else {
+                    final UserMapper user = userMapperAsyncResult.result();
+
+                    findRoomByUUID(vertx, roomID, roomMapperAsyncResult -> {
+                        if (roomMapperAsyncResult.failed()) {
+                            logger.error(roomMapperAsyncResult.cause().toString());
+                        } else {
+                            final RoomMapper room = roomMapperAsyncResult.result();
+
+                            recordMessage(vertx, user, text, Instant.now(), room, messageMapperAsyncResult -> {
+                                if (messageMapperAsyncResult.failed()) {
+                                    logger.error(messageMapperAsyncResult.cause().toString());
+                                } else {
+                                    final MessageMapper message = messageMapperAsyncResult.result();
+
+                                    eventBus.publish("webchat.client", new JsonObject()
+                                            .put("roomID", roomID)
+                                            .put("displayText", formatMessage(message)));
+                                }
+                            });
+                        }
                     });
-                });
+                }
             });
         });
 
@@ -253,7 +271,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
     }
 
     private void protectedIndex(RoutingContext ctx) {
-        Queries.getGeneralRoomUUID(vertx, roomUUID -> {
+        getGeneralRoomUUID(vertx, roomUUID -> {
             final String redirectTo = "/protected/rooms/" + roomUUID;
             found(ctx, redirectTo);
         });
@@ -268,33 +286,41 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         Path roomUUIDPath = prefix.relativize(requestPath);
         String roomUUID = roomUUIDPath.toString();
 
-        logger.info("Serving page for room {}", roomUUID);
-        Queries.findRoomByUUID(vertx, roomUUID, room -> {
-            if (Objects.isNull(room)) {
+        findRoomByUUID(vertx, roomUUID, roomMapperAsyncResult -> {
+            if (roomMapperAsyncResult.failed()) {
+                logger.warn(roomMapperAsyncResult.cause().toString());
                 notFound(ctx);
             } else {
-                Queries.findCreateUserEntityByEmail(vertx, email, user -> {
-                    Objects.requireNonNull(user);
+                final RoomMapper room = roomMapperAsyncResult.result();
 
-                    ctx
-                            .put("userEmail", user.getEmail())
-                            .put("userID", user.getUuid())
-                            .put("roomID", room.getUuid())
-                            .put("roomName", room.getName());
+                findCreateUserEntityByEmail(vertx, email, userMapperAsyncResult -> {
+                    if (userMapperAsyncResult.failed()) {
+                        logger.error(userMapperAsyncResult.cause());
+                        internalServerError(ctx);
+                    } else {
+                        final UserMapper user = userMapperAsyncResult.result();
+                        Objects.requireNonNull(user);
 
-                    templateEngine.render(ctx, "templates/main", asyncResult -> {
-                        if (asyncResult.succeeded()) {
-                            Buffer result = asyncResult.result();
-                            ctx.response()
-                                    .putHeader(Headers.CONTENT_TYPE_HEADER, "text/html; charset=utf-8")
-                                    .putHeader(Headers.CONTENT_LENGTH_HEADER, String.valueOf(result.length()))
-                                    .end(result);
-                        } else {
-                            final Throwable cause = asyncResult.cause();
-                            logger.error(cause.toString());
-                            internalServerError(ctx);
-                        }
-                    });
+                        ctx
+                                .put("userEmail", user.getEmail())
+                                .put("userID", user.getUuid())
+                                .put("roomID", room.getUuid())
+                                .put("roomName", room.getName());
+
+                        templateEngine.render(ctx, "templates/main", templateAsyncResult -> {
+                            if (templateAsyncResult.failed()) {
+                                logger.error(userMapperAsyncResult.cause().toString());
+                                internalServerError(ctx);
+                            } else {
+                                final Buffer buffer = templateAsyncResult.result();
+
+                                ctx.response()
+                                        .putHeader(Headers.CONTENT_TYPE_HEADER, "text/html; charset=utf-8")
+                                        .putHeader(Headers.CONTENT_LENGTH_HEADER, String.valueOf(buffer.length()))
+                                        .end(buffer);
+                            }
+                        });
+                    }
                 });
             }
         });
@@ -304,7 +330,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         final MultiMap params = ctx.request().params();
         final String roomName = params.get("roomName");
 
-        Queries.findCreateRoomByName(vertx, roomName, room -> {
+        findCreateRoomByName(vertx, roomName, room -> {
             logger.info("Created room {}", roomName);
             done(ctx);
         });
@@ -317,23 +343,46 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         Path prefix = Paths.get("/protected/download/");
 
         String roomUID = prefix.relativize(requestPath).toString();
-        logger.info("Downloading messages for room UUID {}", roomUID);
+        if (! Utils.isValidUUID(roomUID)) {
+            badRequest(ctx, "Invalid room UUID");
+        } else {
+            logger.info("Downloading messages for room UUID {}", roomUID);
 
-        Queries.findCreateUserEntityByEmail(vertx, email, userMapper -> {
-            Queries.findRoomByUUID(vertx, roomUID, roomMapper -> {
-                /* TODO: check user authorization for this room, for now we assume we're good */
-                Queries.fetchMessages(vertx, userMapper, roomMapper, messages -> {
+            findCreateUserEntityByEmail(vertx, email, userMapperAsyncResult -> {
+                if (userMapperAsyncResult.failed()) {
+                    logger.error(userMapperAsyncResult.cause().toString());
+                    internalServerError(ctx);
+                } else {
+                    final UserMapper user = userMapperAsyncResult.result();
 
-                    final String fullText = messages.stream()
-                            .map(this::formatPlainMessage)
-                            .collect(Collectors.joining(""));
+                    findRoomByUUID(vertx, roomUID, roomMapperAsyncResult -> {
+                        if (roomMapperAsyncResult.failed()) {
+                            logger.warn(roomMapperAsyncResult.cause());
+                            notFound(ctx);
+                        } else {
+                            final RoomMapper room = roomMapperAsyncResult.result();
 
-                    ctx.response()
-                            .putHeader(Headers.CONTENT_TYPE_HEADER, "text/plain")
-                            .end(fullText);
-                });
+                            fetchMessages(vertx, user, room, messagesAsyncResult -> {
+                                if (messagesAsyncResult.failed()) {
+                                    logger.error(messagesAsyncResult.cause().toString());
+                                    notFound(ctx);
+                                } else {
+                                    final List<MessageMapper> messageMappers = messagesAsyncResult.result();
+
+                                    final String fullText = messageMappers.stream()
+                                            .map(this::formatPlainMessage)
+                                            .collect(Collectors.joining(""));
+
+                                    ctx.response()
+                                            .putHeader(Headers.CONTENT_TYPE_HEADER, "text/plain")
+                                            .end(fullText);
+                                }
+                            });
+                        }
+                    });
+                }
             });
-        });
+        }
     }
 
     /**
@@ -347,30 +396,47 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         Path prefix = Paths.get("/protected/history");
         String roomUID = prefix.relativize(Paths.get(urlDecode(ctx.request().path()))).toString();
 
-        Queries.findCreateUserEntityByEmail(vertx, email, userMapper -> {
-            Queries.findRoomByUUID(vertx, roomUID, roomMapper -> {
-                /* TODO: check user authorization for this room, for now we assume we're good */
-                Queries.fetchMessages(vertx, userMapper, roomMapper, messages -> {
+        findCreateUserEntityByEmail(vertx, email, userMapperAsyncResult -> {
+            if (userMapperAsyncResult.failed()) {
+                logger.warn(userMapperAsyncResult.cause());
+                forbidden(ctx);
+            } else {
+                final UserMapper user = userMapperAsyncResult.result();
 
-                    final List<String> history = messages.stream()
-                            .map(this::formatMessage)
-                            .collect(Collectors.toList());
+                findRoomByUUID(vertx, roomUID, roomMapperAsyncResult -> {
+                    if (roomMapperAsyncResult.failed()) {
+                        logger.warn(roomMapperAsyncResult.cause());
+                        notFound(ctx);
+                    } else {
+                        final RoomMapper room = roomMapperAsyncResult.result();
 
-                    String body = new JsonObject()
-                            .put("data", new JsonObject()
-                                    .put("history", history))
-                            .encodePrettily();
+                        fetchMessages(vertx, user, room, messagesAsyncResult -> {
+                            if (messagesAsyncResult.failed()) {
+                                logger.error(messagesAsyncResult.cause());
+                            } else {
+                                final List<MessageMapper> messages =
+                                        messagesAsyncResult.result();
 
-                    ctx.response()
-                            .putHeader(Headers.CONTENT_LENGTH_HEADER, String.valueOf(body.length()))
-                            .putHeader(Headers.CONTENT_TYPE_HEADER, "application/json; charset=utf-8")
-                            .end(body);
+                                final List<String> history = messages.stream()
+                                        .map(this::formatMessage)
+                                        .collect(Collectors.toList());
+
+                                String body = new JsonObject()
+                                        .put("data", new JsonObject()
+                                                .put("history", history))
+                                        .encodePrettily();
+
+                                ctx.response()
+                                        .putHeader(Headers.CONTENT_LENGTH_HEADER, String.valueOf(body.length()))
+                                        .putHeader(Headers.CONTENT_TYPE_HEADER, "application/json; charset=utf-8")
+                                        .end(body);
+                            }
+                        });
+                    }
                 });
-            });
+            }
         });
     }
-
-
 
     /*** Responders ***************************************************************************************************/
     private void badRequest(RoutingContext ctx, String message) {
@@ -544,6 +610,281 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 .setStatusCode(StatusCode.FOUND.getStatusCode())
                 .setStatusMessage(StatusCode.FOUND.getStatusMessage())
                 .end();
+    }
+
+    /** Queries *******************************************************************************************************/
+    /**
+     * Retrieves a User entity by email, or creates a new one if no such entity exists.
+     *
+     * @param email - the user's email
+     * @param handler
+     */
+    private void findCreateUserEntityByEmail(Vertx vertx, String email, Handler<AsyncResult<UserMapper>> handler) {
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.FIND_CREATE_USER_BY_EMAIL)
+                .put("params", new JsonObject()
+                        .put("email", email));
+
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.failed()) {
+                handler.handle(Future.failedFuture(reply.cause()));
+            } else {
+                final JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(Future.failedFuture("Null result"));
+                } else {
+                    final JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    } else {
+                        UserMapper user;
+                        try {
+                            user = obj.getJsonObject("result").mapTo(UserMapper.class);
+                            handler.handle(Future.succeededFuture(user));
+                        } catch (Throwable t) {
+                            handler.handle(Future.failedFuture(t));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Retrieves a Room entity by name, or creates a new one if no such entity exists.
+     *
+     * @param name - the room name
+     * @param handler
+     */
+    private void findCreateRoomByName(Vertx vertx, String name, Handler<AsyncResult<RoomMapper>> handler) {
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.FIND_CREATE_ROOM_BY_NAME)
+                .put("params", new JsonObject()
+                        .put("name", name));
+
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.failed()) {
+                handler.handle(Future.failedFuture(reply.cause()));
+            } else {
+                final JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(Future.failedFuture("Null result"));
+                } else {
+                    final JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    } else {
+                        try {
+                            RoomMapper room = result.mapTo(RoomMapper.class);
+                            handler.handle(Future.succeededFuture(room));
+                        } catch (Throwable t) {
+                            handler.handle(Future.failedFuture(t));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Retrieves a User entity by uuid.
+     *
+     * @param uuid
+     * @param handler
+     */
+    private void findUserByUUID(Vertx vertx, String uuid, Handler<AsyncResult<UserMapper>> handler) {
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.FIND_USER_BY_UUID)
+                .put("params", new JsonObject()
+                        .put("uuid", uuid));
+
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.failed()) {
+                handler.handle(Future.failedFuture(reply.cause()));
+            } else {
+                JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(Future.failedFuture("Null reply message"));
+                } else {
+                    JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    } else {
+                        try {
+                            handler.handle(Future.succeededFuture(result.mapTo(UserMapper.class)));
+                        } catch (Throwable t) {
+                            handler.handle(Future.failedFuture(t));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Retrieves a Room entity by uuid.
+     *
+     * @param uuid
+     * @param handler
+     */
+    private void findRoomByUUID(Vertx vertx, String uuid, Handler<AsyncResult<RoomMapper>> handler) {
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.FIND_ROOM_BY_UUID)
+                .put("params", new JsonObject()
+                        .put("uuid", uuid));
+
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.failed()) {
+                handler.handle(Future.failedFuture(reply.cause()));
+            } else {
+                JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(Future.failedFuture("Null reply message"));
+                } else {
+                    JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    } else {
+                        try {
+                            handler.handle(Future.succeededFuture(result.mapTo(RoomMapper.class)));
+                        } catch (Throwable t) {
+                            handler.handle(Future.failedFuture(t));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Records a new message: who said what, when and where.
+     *
+     * @param userMapper
+     * @param timeStamp
+     * @param messageText
+     * @param handler
+     */
+    private void recordMessage(Vertx vertx, UserMapper userMapper, String messageText, Instant timeStamp,
+                               RoomMapper roomMapper, Handler<AsyncResult<MessageMapper>> handler) {
+
+        Objects.requireNonNull(userMapper, "user is null");
+        Objects.requireNonNull(messageText, "messageText is null");
+        Objects.requireNonNull(timeStamp, "timeStamp is null");
+        Objects.requireNonNull(roomMapper, "room is null");
+
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.RECORD_MESSAGE)
+                .put("params", new JsonObject()
+                        .put("user", JsonObject.mapFrom(userMapper))
+                        .put("messageText", messageText)
+                        .put("timeStamp", timeStamp.toString())
+                        .put("room", JsonObject.mapFrom(roomMapper)));
+
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.failed()) {
+                handler.handle(Future.failedFuture(reply.cause()));
+            } else {
+                JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(Future.failedFuture("Null reply message"));
+                } else {
+                    JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    } else {
+                        try {
+                            handler.handle(Future.succeededFuture(result.mapTo(MessageMapper.class)));
+                        } catch (Throwable t) {
+                            handler.handle(Future.failedFuture(t));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+
+    /**
+     * Retrieve general room UUID
+     *
+     * @param vertx
+     * @param handler
+     */
+    private void getGeneralRoomUUID(Vertx vertx, Handler<AsyncResult<String>> handler) {
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.GET_GENERAL_ROOM_UUID);
+
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.failed()) {
+                handler.handle(Future.failedFuture(reply.cause()));
+            } else {
+                JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(Future.failedFuture("Null reply message"));
+                } else {
+                    JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    } else {
+                        try {
+                            handler.handle(Future.succeededFuture(result.getString("uuid")));
+                        } catch (Throwable t) {
+                            handler.handle(Future.failedFuture(t));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Fetches messages for a given room. User permissions shall be checked (TODO)
+     *
+     * @param userMapper
+     * @param roomMapper
+     * @param handler
+     */
+    private void fetchMessages(Vertx vertx, UserMapper userMapper,
+                               RoomMapper roomMapper, Handler<AsyncResult<List<MessageMapper>>> handler) {
+
+        Objects.requireNonNull(userMapper, "user is null");
+        Objects.requireNonNull(roomMapper, "room is null");
+
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.FETCH_MESSAGES)
+                .put("params", new JsonObject()
+                        .put("roomUUID", roomMapper.getUuid()));
+
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.failed()) {
+                handler.handle(Future.failedFuture(reply.cause()));
+            } else {
+                JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(Future.failedFuture("Null reply message"));
+                } else {
+                    JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    } else {
+                        try {
+                            final List<JsonObject> jsonObjects =
+                                    result.getJsonArray("messages").getList();
+
+                            final List<MessageMapper> messages =
+                                    jsonObjects
+                                            .stream()
+                                            .map(x -> x.mapTo(MessageMapper.class))
+                                            .collect(Collectors.toList());
+
+                            handler.handle(Future.succeededFuture(messages));
+                        } catch (Throwable t) {
+                            handler.handle(Future.failedFuture(t));
+                        }
+                    }
+                }
+            }
+        });
     }
 
     /*** Helpers ******************************************************************************************************/

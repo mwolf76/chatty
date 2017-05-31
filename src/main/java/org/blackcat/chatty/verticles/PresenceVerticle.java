@@ -3,6 +3,7 @@ package org.blackcat.chatty.verticles;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -11,7 +12,7 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
 import io.vertx.redis.RedisOptions;
 import org.blackcat.chatty.conf.Configuration;
-import org.blackcat.chatty.mappers.Queries;
+import org.blackcat.chatty.mappers.RoomMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -154,7 +155,7 @@ public class PresenceVerticle extends AbstractVerticle {
 
         /* setting up room list broadcast */
         vertx.setPeriodic(ROOMLIST_BROADCAST_INTERVAL, tick -> {
-            Queries.findRooms(vertx, rooms -> {
+            findRooms(vertx, rooms -> {
                 eventBus.publish("webchat.rooms", new JsonObject().put("rooms", new JsonArray(rooms
                         .stream().map(JsonObject::mapFrom).collect(Collectors.toList()))));
             });
@@ -172,6 +173,32 @@ public class PresenceVerticle extends AbstractVerticle {
         redisClient.psetex(key, PRESENCE_PERSISTENCE_DURATION, "", done -> {
             logger.debug("Key {}", key);
             handler.handle(null);
+        });
+    }
+
+    /**
+     * Find all defined rooms.
+     *
+     * @param handler
+     */
+    private void findRooms(Vertx vertx, Handler<List<RoomMapper>> handler) {
+        JsonObject query = new JsonObject()
+                .put("type", DataStoreVerticle.FIND_ROOMS)
+                .put("params", new JsonObject());
+
+        logger.info(query);
+        vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
+            if (reply.succeeded()) {
+                JsonObject body = (JsonObject) reply.result().body();
+                final List<JsonObject> jsonObjects =
+                        body.getJsonObject("result").getJsonArray("rooms").getList();
+
+                handler.handle(jsonObjects.stream().map(obj -> obj.mapTo(RoomMapper.class))
+                        .collect(Collectors.toList()));
+            } else {
+                final Throwable cause = reply.cause();
+                logger.error(cause.toString());
+            }
         });
     }
 }

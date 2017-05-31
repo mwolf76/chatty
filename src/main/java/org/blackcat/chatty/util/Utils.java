@@ -61,4 +61,15 @@ final public class Utils {
         return emailPattern.matcher(email).matches();
     }
 
+    public static boolean isValidUUID(String uuid) {
+        boolean res = true;
+
+        try {
+            final UUID uuid1 = UUID.fromString(uuid);
+        } catch (IllegalArgumentException iae) {
+            res = false;
+        }
+
+        return res;
+    }
 }
