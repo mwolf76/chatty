@@ -124,7 +124,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 final UserMapper user = asyncResult.result();
                                 JsonObject reply = new JsonObject().put("result",
                                         Objects.isNull(user) ? null : JsonObject.mapFrom(user));
-                                logger.info("{} {} := {}", FIND_CREATE_USER_BY_EMAIL, params, reply);
+                                logger.debug("{}({}) := {}", FIND_CREATE_USER_BY_EMAIL, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -137,7 +137,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 final RoomMapper room = asyncResult.result();
                                 JsonObject reply = new JsonObject().put("result",
                                         Objects.isNull(room) ? null : JsonObject.mapFrom(room));
-                                logger.info("{} {} := {}", FIND_CREATE_ROOM_BY_NAME, params, reply);
+                                logger.debug("{}({}) := {}", FIND_CREATE_ROOM_BY_NAME, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -150,7 +150,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 final UserMapper user = asyncResult.result();
                                 JsonObject reply = new JsonObject().put("result",
                                         Objects.isNull(user) ? null : JsonObject.mapFrom(user));
-                                logger.info("{} {} := {}", FIND_USER_BY_UUID, params, reply);
+                                logger.debug("{}({}) := {}", FIND_USER_BY_UUID, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -163,7 +163,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 final RoomMapper room = asyncResult.result();
                                 JsonObject reply = new JsonObject().put("result",
                                         Objects.isNull(room) ? null : JsonObject.mapFrom(room));
-                                logger.info("{} {} := {}", FIND_ROOM_BY_UUID, params, reply);
+                                logger.debug("{}({}) := {}", FIND_ROOM_BY_UUID, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -178,7 +178,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                         .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
                                 JsonObject reply = new JsonObject().put("result",
                                         new JsonObject().put("rooms", rooms));
-                                logger.info("{} {} := {}", FIND_ROOMS, params, reply);
+                                logger.debug("{}({}) := {}", FIND_ROOMS, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -191,7 +191,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 final MessageMapper message = asyncResult.result();
                                 JsonObject reply = new JsonObject().put("result",
                                         Objects.isNull(message) ? null : JsonObject.mapFrom(message));
-                                logger.info("{} {} := {}", RECORD_MESSAGE, params, reply);
+                                logger.debug("{}({}) := {}", RECORD_MESSAGE, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -207,7 +207,7 @@ public class DataStoreVerticle extends AbstractVerticle {
 
                                 JsonObject reply = new JsonObject().put("result",
                                         new JsonObject().put("messages", messages));
-                                logger.info("{} {} := {}", FETCH_MESSAGES, params, reply);
+                                logger.debug("{}({}) := {}", FETCH_MESSAGES, params, reply);
                                 msg.reply(reply);
                             });
                             break;
@@ -216,7 +216,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                             JsonObject reply = new JsonObject()
                                     .put("result", new JsonObject()
                                             .put("uuid", this.generalRoomUUID));
-                            logger.info("{} := {}", GET_GENERAL_ROOM_UUID, reply);
+                            logger.debug("{} := {}", GET_GENERAL_ROOM_UUID, reply);
                             msg.reply(reply);
                             break;
 

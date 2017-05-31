@@ -136,7 +136,7 @@ public class PresenceVerticle extends AbstractVerticle {
                                     final JsonArray users = new JsonArray(userIDs);
                                     final String channel = "webchat.partakers." + roomID;
                                     eventBus.publish(channel, new JsonObject().put("users", users));
-                                    logger.info("{} <-- {}", channel, users.toString());
+                                    logger.debug("{} <-- {}", channel, users.toString());
                                 }, initFuture);
 
                                 /* let's get this thing started ... */
