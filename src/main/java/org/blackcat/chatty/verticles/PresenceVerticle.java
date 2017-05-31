@@ -1,9 +1,7 @@
 package org.blackcat.chatty.verticles;
 
-import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Future;
-import io.vertx.core.Handler;
-import io.vertx.core.Vertx;
+import com.mitchellbosecke.pebble.PebbleEngine;
+import io.vertx.core.*;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -14,10 +12,7 @@ import io.vertx.redis.RedisOptions;
 import org.blackcat.chatty.conf.Configuration;
 import org.blackcat.chatty.mappers.RoomMapper;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class PresenceVerticle extends AbstractVerticle {
@@ -155,9 +150,14 @@ public class PresenceVerticle extends AbstractVerticle {
 
         /* setting up room list broadcast */
         vertx.setPeriodic(ROOMLIST_BROADCAST_INTERVAL, tick -> {
-            findRooms(vertx, rooms -> {
-                eventBus.publish("webchat.rooms", new JsonObject().put("rooms", new JsonArray(rooms
-                        .stream().map(JsonObject::mapFrom).collect(Collectors.toList()))));
+            findRooms(vertx, roomsAsyncResult -> {
+                if (roomsAsyncResult.failed()) {
+                    logger.error(roomsAsyncResult.cause().toString());
+                } else {
+                    final List<RoomMapper> rooms = roomsAsyncResult.result();
+                    eventBus.publish("webchat.rooms", new JsonObject().put("rooms", new JsonArray(rooms
+                            .stream().map(JsonObject::mapFrom).collect(Collectors.toList()))));
+                }
             });
         });
 
@@ -181,23 +181,40 @@ public class PresenceVerticle extends AbstractVerticle {
      *
      * @param handler
      */
-    private void findRooms(Vertx vertx, Handler<List<RoomMapper>> handler) {
+    private void findRooms(Vertx vertx, Handler<AsyncResult<List<RoomMapper>>> handler) {
         JsonObject query = new JsonObject()
                 .put("type", DataStoreVerticle.FIND_ROOMS)
                 .put("params", new JsonObject());
 
-        logger.info(query);
         vertx.eventBus().send(DataStoreVerticle.ADDRESS, query, reply -> {
-            if (reply.succeeded()) {
-                JsonObject body = (JsonObject) reply.result().body();
-                final List<JsonObject> jsonObjects =
-                        body.getJsonObject("result").getJsonArray("rooms").getList();
-
-                handler.handle(jsonObjects.stream().map(obj -> obj.mapTo(RoomMapper.class))
-                        .collect(Collectors.toList()));
+            if (reply.failed()) {
+                handler.handle(Future.failedFuture(reply.cause()));
             } else {
-                final Throwable cause = reply.cause();
-                logger.error(cause.toString());
+                JsonObject obj = (JsonObject) reply.result().body();
+                if (Objects.isNull(obj)) {
+                    handler.handle(Future.failedFuture("Empty reply message"));
+                } else {
+                    final JsonObject result = obj.getJsonObject("result");
+                    if (Objects.isNull(result)) {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    } else {
+                        try {
+                            final JsonArray jsonArray = result.getJsonArray("rooms");
+                            if (Objects.isNull(jsonArray)) {
+                                handler.handle(Future.failedFuture("Null rooms list"));
+                            } else {
+                                final List<JsonObject> list = jsonArray.getList();
+                                final List<RoomMapper> rooms = list.stream()
+                                        .map(x -> x.mapTo(RoomMapper.class))
+                                        .collect(Collectors.toList());
+
+                                handler.handle(Future.succeededFuture(rooms));
+                            }
+                        } catch (ClassCastException cce) {
+                            handler.handle(Future.failedFuture(cce));
+                        }
+                    }
+                }
             }
         });
     }
