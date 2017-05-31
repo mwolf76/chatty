@@ -271,9 +271,15 @@ public class RequestHandler implements Handler<HttpServerRequest> {
     }
 
     private void protectedIndex(RoutingContext ctx) {
-        getGeneralRoomUUID(vertx, roomUUID -> {
-            final String redirectTo = "/protected/rooms/" + roomUUID;
-            found(ctx, redirectTo);
+        getGeneralRoomUUID(vertx, stringAsyncResult -> {
+            if (stringAsyncResult.failed()) {
+                logger.warn(stringAsyncResult.cause().toString());
+                internalServerError(ctx);
+            } else {
+                final String roomUUID = stringAsyncResult.result();
+                final String redirectTo = "/protected/rooms/" + roomUUID;
+                found(ctx, redirectTo);
+            }
         });
     }
 
