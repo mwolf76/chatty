@@ -1,5 +1,11 @@
 package org.blackcat.chatty.util;
 
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.auth.User;
+import io.vertx.ext.auth.oauth2.AccessToken;
+import io.vertx.ext.auth.oauth2.KeycloakHelper;
+import io.vertx.ext.web.RoutingContext;
+
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -14,6 +20,16 @@ final public class Utils {
 
     private Utils()
     {}
+
+    public static String getSessionUserEmail(RoutingContext ctx) {
+        User User = ctx.user();
+        AccessToken at = (AccessToken) User;
+
+        JsonObject idToken = KeycloakHelper.idToken(at.principal());
+        String email = idToken.getString("email");
+
+        return email;
+    }
 
     public static String humanReadableByteCount(long bytes, boolean si) {
         int unit = si ? 1000 : 1024;

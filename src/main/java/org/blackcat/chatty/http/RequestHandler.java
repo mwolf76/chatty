@@ -1,11 +1,12 @@
 package org.blackcat.chatty.http;
 
-import com.mitchellbosecke.pebble.PebbleEngine;
 import io.vertx.core.*;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.Json;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.ext.auth.User;
@@ -22,6 +23,7 @@ import io.vertx.ext.web.handler.sockjs.SockJSHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.templ.TemplateEngine;
 import org.blackcat.chatty.conf.Configuration;
+import org.blackcat.chatty.http.responses.*;
 import org.blackcat.chatty.mappers.MessageMapper;
 import org.blackcat.chatty.mappers.RoomMapper;
 import org.blackcat.chatty.mappers.UserMapper;
@@ -133,17 +135,17 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         /* invalid URL */
         router
                 .getWithRegex(".*")
-                .handler(this::notFound);
+                .handler(HtmlResponse::notFound);
 
        /* invalid method */
         router
                 .routeWithRegex(".*")
-                .handler(this::notAllowed);
+                .handler(HtmlResponse::badRequest);
 
         /* errors */
         router
                 .route()
-                .failureHandler(this::internalServerError);
+                .failureHandler(HtmlResponse::internalServerError);
     }
 
     private String formatPlainMessage(MessageMapper messageMapper) {
@@ -151,6 +153,14 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(
                         Date.from(Instant.from(ISO_INSTANT.parse(messageMapper.getTimeStamp())))),
                 messageMapper.getAuthor().getEmail(), messageMapper.getText());
+    }
+
+    private JsonArray formatJsonMessage(MessageMapper messageMapper) {
+        return new JsonArray()
+                .add(DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(
+                        Date.from(Instant.from(ISO_INSTANT.parse(messageMapper.getTimeStamp())))))
+                .add(messageMapper.getAuthor().getEmail())
+                .add(messageMapper.getText());
     }
 
     private String formatMessage(MessageMapper messageMapper) {
@@ -190,6 +200,14 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 .route()
                 .handler(UserSessionHandler.create(authProvider));
 
+        // add template engine to the routing ctx. This is needed by HTML error pages.
+        router
+                .route()
+                .handler(ctx -> {
+                    ctx.put("templateEngine", templateEngine);
+                    ctx.next();
+                });
+
         // setup the callback handler for receiving the Google callback
         authHandler.setupCallback(router.get(callbackURL));
 
@@ -220,7 +238,6 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 .put("/protected/new-room")
                 .handler(this::newRoom);
 
-
         router
                 .getWithRegex("/protected/download/.*")
                 .handler(this::download);
@@ -233,7 +250,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                     AccessToken token = (AccessToken) User;
 
                     if (token == null) {
-                        found(ctx, "/");
+                        BaseResponse.found(ctx, "/");
                     }
                     else {
                         // Revoke only the access token
@@ -242,7 +259,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                                 logger.info("Revoked tokens");
 
                                 ctx.clearUser();
-                                found(ctx, "/");
+                                BaseResponse.found(ctx, "/");
                             });
                         });
                     }
@@ -270,22 +287,32 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         });
     }
 
+    /**
+     * Redirects to Main room page.
+     *
+     * @param ctx
+     */
     private void protectedIndex(RoutingContext ctx) {
         getGeneralRoomUUID(vertx, stringAsyncResult -> {
             if (stringAsyncResult.failed()) {
                 logger.warn(stringAsyncResult.cause().toString());
-                internalServerError(ctx);
+                HtmlResponse.internalServerError(ctx);
             } else {
                 final String roomUUID = stringAsyncResult.result();
                 final String redirectTo = "/protected/rooms/" + roomUUID;
-                found(ctx, redirectTo);
+
+                BaseResponse.found(ctx, redirectTo);
             }
         });
     }
 
-    /* main page server */
+    /**
+     * main page
+     *
+     * @param ctx
+     */
     private void main(RoutingContext ctx) {
-        String email = getSessionUserEmail(ctx);
+        String email = Utils.getSessionUserEmail(ctx);
 
         Path prefix = Paths.get("/protected/rooms/");
         Path requestPath = Paths.get(ctx.request().path());
@@ -295,14 +322,14 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         findRoomByUUID(vertx, roomUUID, roomMapperAsyncResult -> {
             if (roomMapperAsyncResult.failed()) {
                 logger.warn(roomMapperAsyncResult.cause().toString());
-                notFound(ctx);
+                HtmlResponse.notFound(ctx);
             } else {
                 final RoomMapper room = roomMapperAsyncResult.result();
 
                 findCreateUserEntityByEmail(vertx, email, userMapperAsyncResult -> {
                     if (userMapperAsyncResult.failed()) {
                         logger.error(userMapperAsyncResult.cause());
-                        internalServerError(ctx);
+                        HtmlResponse.internalServerError(ctx);
                     } else {
                         final UserMapper user = userMapperAsyncResult.result();
                         Objects.requireNonNull(user);
@@ -316,7 +343,7 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                         templateEngine.render(ctx, "templates/main", templateAsyncResult -> {
                             if (templateAsyncResult.failed()) {
                                 logger.error(userMapperAsyncResult.cause().toString());
-                                internalServerError(ctx);
+                                HtmlResponse.internalServerError(ctx);
                             } else {
                                 final Buffer buffer = templateAsyncResult.result();
 
@@ -332,56 +359,76 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         });
     }
 
+    /**
+     * create a new room (AJAX, JSON response).
+     *
+     * @param ctx
+     */
     private void newRoom(RoutingContext ctx) {
         final MultiMap params = ctx.request().params();
         final String roomName = params.get("roomName");
 
-        findCreateRoomByName(vertx, roomName, room -> {
-            logger.info("Created room {}", roomName);
-            done(ctx);
+        findCreateRoomByName(vertx, roomName, roomMapperAsyncResult -> {
+            if (roomMapperAsyncResult.failed()) {
+                logger.error(roomMapperAsyncResult.cause().toString());
+                JsonResponse.internalServerError(ctx);
+            } else {
+                logger.info("Created room {}", roomName);
+                JsonResponse.ok(ctx, new JsonObject());
+            }
         });
     }
 
+    /**
+     * Downloads full chat history for the room (plain text response).
+     *
+     * @param ctx
+     */
     private void download(RoutingContext ctx) {
-        String email = getSessionUserEmail(ctx);
+        String email = Utils.getSessionUserEmail(ctx);
 
         Path requestPath = Paths.get(urlDecode(ctx.request().path()));
-        Path prefix = Paths.get("/protected/download/");
+        Path prefix = Paths.get("/protected/download");
 
         String roomUID = prefix.relativize(requestPath).toString();
         if (! Utils.isValidUUID(roomUID)) {
-            badRequest(ctx, "Invalid room UUID");
+            BaseResponse.badRequest(ctx, "Invalid room UUID");
         } else {
             logger.info("Downloading messages for room UUID {}", roomUID);
 
             findCreateUserEntityByEmail(vertx, email, userMapperAsyncResult -> {
                 if (userMapperAsyncResult.failed()) {
-                    logger.error(userMapperAsyncResult.cause().toString());
-                    internalServerError(ctx);
+                    final Throwable cause = userMapperAsyncResult.cause();
+
+                    logger.error(cause.toString());
+                    BaseResponse.internalServerError(ctx, cause);
                 } else {
                     final UserMapper user = userMapperAsyncResult.result();
 
                     findRoomByUUID(vertx, roomUID, roomMapperAsyncResult -> {
                         if (roomMapperAsyncResult.failed()) {
-                            logger.warn(roomMapperAsyncResult.cause());
-                            notFound(ctx);
+                            final Throwable cause = roomMapperAsyncResult.cause();
+
+                            logger.error(cause.toString());
+                            BaseResponse.internalServerError(ctx, cause);
                         } else {
                             final RoomMapper room = roomMapperAsyncResult.result();
 
                             fetchMessages(vertx, user, room, messagesAsyncResult -> {
                                 if (messagesAsyncResult.failed()) {
-                                    logger.error(messagesAsyncResult.cause().toString());
-                                    notFound(ctx);
+                                    final Throwable cause = messagesAsyncResult.cause();
+
+                                    logger.error(cause.toString());
+                                    BaseResponse.internalServerError(ctx, cause);
                                 } else {
-                                    final List<MessageMapper> messageMappers = messagesAsyncResult.result();
+                                    final List<MessageMapper> messageMappers =
+                                            messagesAsyncResult.result();
 
                                     final String fullText = messageMappers.stream()
                                             .map(this::formatPlainMessage)
                                             .collect(Collectors.joining(""));
 
-                                    ctx.response()
-                                            .putHeader(Headers.CONTENT_TYPE_HEADER, "text/plain")
-                                            .end(fullText);
+                                    TextResponse.done(ctx, fullText);
                                 }
                             });
                         }
@@ -392,12 +439,12 @@ public class RequestHandler implements Handler<HttpServerRequest> {
     }
 
     /**
-     * Retrieves messages history for the given room.
+     * Downloads full chat history for the room (JSON response).
      *
      * @param ctx
      */
     private void history(RoutingContext ctx) {
-        String email = getSessionUserEmail(ctx);
+        String email = Utils.getSessionUserEmail(ctx);
 
         Path prefix = Paths.get("/protected/history");
         String roomUID = prefix.relativize(Paths.get(urlDecode(ctx.request().path()))).toString();
@@ -405,14 +452,14 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         findCreateUserEntityByEmail(vertx, email, userMapperAsyncResult -> {
             if (userMapperAsyncResult.failed()) {
                 logger.warn(userMapperAsyncResult.cause());
-                forbidden(ctx);
+                JsonResponse.forbidden(ctx);
             } else {
                 final UserMapper user = userMapperAsyncResult.result();
 
                 findRoomByUUID(vertx, roomUID, roomMapperAsyncResult -> {
                     if (roomMapperAsyncResult.failed()) {
                         logger.warn(roomMapperAsyncResult.cause());
-                        notFound(ctx);
+                        JsonResponse.notFound(ctx);
                     } else {
                         final RoomMapper room = roomMapperAsyncResult.result();
 
@@ -423,19 +470,12 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                                 final List<MessageMapper> messages =
                                         messagesAsyncResult.result();
 
-                                final List<String> history = messages.stream()
-                                        .map(this::formatMessage)
+                                final List<JsonArray> history = messages.stream()
+                                        .map(this::formatJsonMessage)
                                         .collect(Collectors.toList());
 
-                                String body = new JsonObject()
-                                        .put("data", new JsonObject()
-                                                .put("history", history))
-                                        .encodePrettily();
-
-                                ctx.response()
-                                        .putHeader(Headers.CONTENT_LENGTH_HEADER, String.valueOf(body.length()))
-                                        .putHeader(Headers.CONTENT_TYPE_HEADER, "application/json; charset=utf-8")
-                                        .end(body);
+                                JsonResponse.ok(ctx, new JsonObject()
+                                        .put("history", history));
                             }
                         });
                     }
@@ -444,181 +484,9 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         });
     }
 
-    /*** Responders ***************************************************************************************************/
-    private void badRequest(RoutingContext ctx, String message) {
-
-        HttpServerRequest request = ctx.request();
-        logger.debug("Bad Request: {}", request.uri());
-
-        request.response()
-                .setStatusCode(StatusCode.BAD_REQUEST.getStatusCode())
-                .setStatusMessage(StatusCode.BAD_REQUEST.getStatusMessage())
-                .end(message != null ? message : StatusCode.BAD_REQUEST.getStatusMessage());
-    }
-
-    private void conflict(RoutingContext ctx, String message) {
-        HttpServerRequest request = ctx.request();
-        logger.debug("Conflict: {}", message);
-
-        request.response()
-                .setStatusCode(StatusCode.CONFLICT.getStatusCode())
-                .setStatusMessage(StatusCode.CONFLICT.getStatusMessage())
-                .end(message);
-    }
-
-    private void done(RoutingContext ctx) {
-        ctx.response()
-                .end();
-    }
-
-    private void notAllowed(RoutingContext ctx) {
-        HttpServerRequest request = ctx.request();
-        logger.debug("Not allowed: {}", request.uri());
-
-        request.response()
-                .setStatusCode(StatusCode.METHOD_NOT_ALLOWED.getStatusCode())
-                .setStatusMessage(StatusCode.METHOD_NOT_ALLOWED.getStatusMessage())
-                .end(StatusCode.METHOD_NOT_ALLOWED.toString());
-    }
-
-    private void notAcceptable(RoutingContext ctx) {
-        HttpServerRequest request = ctx.request();
-        logger.debug("Not acceptable: {}", request.uri());
-
-        request.response()
-                .setStatusCode(StatusCode.NOT_ACCEPTABLE.getStatusCode())
-                .setStatusMessage(StatusCode.NOT_ACCEPTABLE.getStatusMessage())
-                .end(StatusCode.NOT_ACCEPTABLE.toString());
-    }
-
-    private void notFound(RoutingContext ctx) {
-        HttpServerRequest request = ctx.request();
-        final MultiMap headers = request.headers();
-        String accept = headers.get(Headers.ACCEPT_HEADER);
-        boolean html = (accept != null && accept.contains("text/html"));
-        boolean json = (accept != null && accept.contains("application/json"));
-
-        logger.debug("Resource not found: {}", request.uri());
-        HttpServerResponse response = ctx.response();
-        response
-                .setStatusCode(StatusCode.NOT_FOUND.getStatusCode())
-                .setStatusMessage(StatusCode.NOT_FOUND.getStatusMessage());
-
-        if (html) {
-            templateEngine.render(ctx, "templates/notfound", asyncResult -> {
-                if (asyncResult.succeeded()) {
-                    response
-                            .putHeader(Headers.CONTENT_TYPE_HEADER, "text/html; charset=utf-8")
-                            .end(asyncResult.result());
-                }
-            });
-        } else if (json) {
-            response
-                    .end(new JsonObject()
-                            .put("status", "error")
-                            .put("message", "Not Found")
-                            .encodePrettily());
-        } else /* assume: text/plain */ {
-            response
-                    .end(StatusCode.NOT_FOUND.toString());
-        }
-    }
-
-    private void forbidden(RoutingContext ctx) {
-        HttpServerRequest request = ctx.request();
-        final MultiMap headers = request.headers();
-        String accept = headers.get(Headers.ACCEPT_HEADER);
-        boolean html = (accept != null && accept.contains("text/html"));
-        boolean json = (accept != null && accept.contains("application/json"));
-
-        logger.debug("Resource not found: {}", request.uri());
-        HttpServerResponse response = ctx.response();
-        response
-                .setStatusCode(StatusCode.FORBIDDEN.getStatusCode())
-                .setStatusMessage(StatusCode.FORBIDDEN.getStatusMessage());
-
-        if (html) {
-            templateEngine.render(ctx, "templates/forbidden", asyncResult -> {
-                if (asyncResult.succeeded()) {
-                    response
-                            .putHeader(Headers.CONTENT_TYPE_HEADER, "text/html; charset=utf-8")
-                            .end(asyncResult.result());
-                }
-            });
-        } else if (json) {
-            response
-                    .end(new JsonObject()
-                            .put("status", "error")
-                            .put("message", "Not Found")
-                            .encodePrettily());
-        } else /* assume: text/plain */ {
-            response
-                    .end(StatusCode.NOT_FOUND.toString());
-        }
-    }
-
-    private void notModified(RoutingContext ctx, String etag) {
-        ctx.response()
-                .setStatusCode(StatusCode.NOT_MODIFIED.getStatusCode())
-                .setStatusMessage(StatusCode.NOT_MODIFIED.getStatusMessage())
-                .putHeader(Headers.ETAG_HEADER, etag)
-                .putHeader(Headers.CONTENT_LENGTH_HEADER, "0")
-                .end();
-    }
-
-    private void ok(RoutingContext ctx) {
-        HttpServerRequest request = ctx.request();
-        logger.debug("Ok: {}", request.uri());
-
-        ctx.response()
-                .setStatusCode(StatusCode.OK.getStatusCode())
-                .setStatusMessage(StatusCode.OK.getStatusMessage())
-                .end(StatusCode.OK.toString());
-    }
-
-    private void internalServerError(RoutingContext ctx) {
-        HttpServerRequest request = ctx.request();
-        final MultiMap headers = request.headers();
-        String accept = headers.get(Headers.ACCEPT_HEADER);
-        boolean html = (accept != null && accept.contains("text/html"));
-        boolean json = (accept != null && accept.contains("application/json"));
-
-        logger.debug("Resource not found: {}", request.uri());
-        HttpServerResponse response = ctx.response();
-        response
-                .setStatusCode(StatusCode.INTERNAL_SERVER_ERROR.getStatusCode())
-                .setStatusMessage(StatusCode.INTERNAL_SERVER_ERROR.getStatusMessage());
-
-        if (html) {
-            templateEngine.render(ctx, "templates/internal", asyncResult -> {
-                if (asyncResult.succeeded()) {
-                    response
-                            .putHeader(Headers.CONTENT_TYPE_HEADER, "text/html; charset=utf-8")
-                            .end(asyncResult.result());
-                }
-            });
-        } else if (json) {
-            response
-                    .end(new JsonObject()
-                            .put("status", "error")
-                            .put("message", "Not Found")
-                            .encodePrettily());
-        } else /* assume: text/plain */ {
-            response
-                    .end(StatusCode.INTERNAL_SERVER_ERROR.toString());
-        }
-    }
-
-    private void found(RoutingContext ctx, String targetURI) {
-        logger.debug("Redirecting to {}", targetURI);
-        ctx.response()
-                .putHeader(Headers.LOCATION_HEADER, targetURI)
-                .setStatusCode(StatusCode.FOUND.getStatusCode())
-                .setStatusMessage(StatusCode.FOUND.getStatusMessage())
-                .end();
-    }
-
     /** Queries *******************************************************************************************************/
+    final private String malformedReplyMessage = "Malformed reply message";
+
     /**
      * Retrieves a User entity by email, or creates a new one if no such entity exists.
      *
@@ -636,20 +504,23 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 handler.handle(Future.failedFuture(reply.cause()));
             } else {
                 final JsonObject obj = (JsonObject) reply.result().body();
-                if (Objects.isNull(obj)) {
-                    handler.handle(Future.failedFuture("Null result"));
-                } else {
-                    final JsonObject result = obj.getJsonObject("result");
-                    if (Objects.isNull(result)) {
-                        handler.handle(Future.failedFuture("Malformed reply message"));
+                Objects.requireNonNull(obj);
+
+                final JsonObject result = obj.getJsonObject("result");
+                if (Objects.isNull(result)) {
+                    final JsonObject failure = obj.getJsonObject("failure");
+                    if (! Objects.isNull(failure)) {
+                        final String cause = failure.getString("cause");
+                        handler.handle(Future.failedFuture(cause));
                     } else {
-                        UserMapper user;
-                        try {
-                            user = obj.getJsonObject("result").mapTo(UserMapper.class);
-                            handler.handle(Future.succeededFuture(user));
-                        } catch (Throwable t) {
-                            handler.handle(Future.failedFuture(t));
-                        }
+                        handler.handle(Future.failedFuture(malformedReplyMessage));
+                    }
+                } else {
+                    try {
+                        final UserMapper user = obj.getJsonObject("result").mapTo(UserMapper.class);
+                        handler.handle(Future.succeededFuture(user));
+                    } catch (Throwable t) {
+                        handler.handle(Future.failedFuture(t));
                     }
                 }
             }
@@ -673,19 +544,23 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 handler.handle(Future.failedFuture(reply.cause()));
             } else {
                 final JsonObject obj = (JsonObject) reply.result().body();
-                if (Objects.isNull(obj)) {
-                    handler.handle(Future.failedFuture("Null result"));
-                } else {
-                    final JsonObject result = obj.getJsonObject("result");
-                    if (Objects.isNull(result)) {
-                        handler.handle(Future.failedFuture("Malformed reply message"));
+                Objects.requireNonNull(obj);
+
+                final JsonObject result = obj.getJsonObject("result");
+                if (Objects.isNull(result)) {
+                    final JsonObject failure = obj.getJsonObject("failure");
+                    if (! Objects.isNull(failure)) {
+                        final String cause = failure.getString("cause");
+                        handler.handle(Future.failedFuture(cause));
                     } else {
-                        try {
-                            RoomMapper room = result.mapTo(RoomMapper.class);
-                            handler.handle(Future.succeededFuture(room));
-                        } catch (Throwable t) {
-                            handler.handle(Future.failedFuture(t));
-                        }
+                        handler.handle(Future.failedFuture(malformedReplyMessage));
+                    }
+                } else {
+                    try {
+                        final RoomMapper room = result.mapTo(RoomMapper.class);
+                        handler.handle(Future.succeededFuture(room));
+                    } catch (Throwable t) {
+                        handler.handle(Future.failedFuture(t));
                     }
                 }
             }
@@ -709,18 +584,23 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 handler.handle(Future.failedFuture(reply.cause()));
             } else {
                 JsonObject obj = (JsonObject) reply.result().body();
-                if (Objects.isNull(obj)) {
-                    handler.handle(Future.failedFuture("Null reply message"));
-                } else {
-                    JsonObject result = obj.getJsonObject("result");
-                    if (Objects.isNull(result)) {
-                        handler.handle(Future.failedFuture("Malformed reply message"));
+                Objects.requireNonNull(obj);
+
+                final JsonObject result = obj.getJsonObject("result");
+                if (Objects.isNull(result)) {
+                    final JsonObject failure = obj.getJsonObject("failure");
+                    if (! Objects.isNull(failure)) {
+                        final String cause = failure.getString("cause");
+                        handler.handle(Future.failedFuture(cause));
                     } else {
-                        try {
-                            handler.handle(Future.succeededFuture(result.mapTo(UserMapper.class)));
-                        } catch (Throwable t) {
-                            handler.handle(Future.failedFuture(t));
-                        }
+                        handler.handle(Future.failedFuture(malformedReplyMessage));
+                    }
+                } else {
+                    try {
+                        final UserMapper user = result.mapTo(UserMapper.class);
+                        handler.handle(Future.succeededFuture(user));
+                    } catch (Throwable t) {
+                        handler.handle(Future.failedFuture(t));
                     }
                 }
             }
@@ -744,18 +624,23 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 handler.handle(Future.failedFuture(reply.cause()));
             } else {
                 JsonObject obj = (JsonObject) reply.result().body();
-                if (Objects.isNull(obj)) {
-                    handler.handle(Future.failedFuture("Null reply message"));
-                } else {
-                    JsonObject result = obj.getJsonObject("result");
-                    if (Objects.isNull(result)) {
-                        handler.handle(Future.failedFuture("Malformed reply message"));
+                Objects.requireNonNull(obj);
+
+                final JsonObject result = obj.getJsonObject("result");
+                if (Objects.isNull(result)) {
+                    final JsonObject failure = obj.getJsonObject("failure");
+                    if (! Objects.isNull(failure)) {
+                        final String cause = failure.getString("cause");
+                        handler.handle(Future.failedFuture(cause));
                     } else {
-                        try {
-                            handler.handle(Future.succeededFuture(result.mapTo(RoomMapper.class)));
-                        } catch (Throwable t) {
-                            handler.handle(Future.failedFuture(t));
-                        }
+                        handler.handle(Future.failedFuture(malformedReplyMessage));
+                    }
+                } else {
+                    try {
+                        final RoomMapper room = result.mapTo(RoomMapper.class);
+                        handler.handle(Future.succeededFuture(room));
+                    } catch (Throwable t) {
+                        handler.handle(Future.failedFuture(t));
                     }
                 }
             }
@@ -791,24 +676,28 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 handler.handle(Future.failedFuture(reply.cause()));
             } else {
                 JsonObject obj = (JsonObject) reply.result().body();
-                if (Objects.isNull(obj)) {
-                    handler.handle(Future.failedFuture("Null reply message"));
-                } else {
-                    JsonObject result = obj.getJsonObject("result");
-                    if (Objects.isNull(result)) {
-                        handler.handle(Future.failedFuture("Malformed reply message"));
+                Objects.requireNonNull(obj);
+
+                final JsonObject result = obj.getJsonObject("result");
+                if (Objects.isNull(result)) {
+                    final JsonObject failure = obj.getJsonObject("failure");
+                    if (! Objects.isNull(failure)) {
+                        final String cause = failure.getString("cause");
+                        handler.handle(Future.failedFuture(cause));
                     } else {
-                        try {
-                            handler.handle(Future.succeededFuture(result.mapTo(MessageMapper.class)));
-                        } catch (Throwable t) {
-                            handler.handle(Future.failedFuture(t));
-                        }
+                        handler.handle(Future.failedFuture(malformedReplyMessage));
+                    }
+                } else {
+                    try {
+                        final MessageMapper message = result.mapTo(MessageMapper.class);
+                        handler.handle(Future.succeededFuture(message));
+                    } catch (Throwable t) {
+                        handler.handle(Future.failedFuture(t));
                     }
                 }
             }
         });
     }
-
 
     /**
      * Retrieve general room UUID
@@ -825,18 +714,23 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 handler.handle(Future.failedFuture(reply.cause()));
             } else {
                 JsonObject obj = (JsonObject) reply.result().body();
-                if (Objects.isNull(obj)) {
-                    handler.handle(Future.failedFuture("Null reply message"));
-                } else {
-                    JsonObject result = obj.getJsonObject("result");
-                    if (Objects.isNull(result)) {
-                        handler.handle(Future.failedFuture("Malformed reply message"));
+                Objects.requireNonNull(obj);
+
+                final JsonObject result = obj.getJsonObject("result");
+                if (Objects.isNull(result)) {
+                    final JsonObject failure = obj.getJsonObject("failure");
+                    if (! Objects.isNull(failure)) {
+                        final String cause = failure.getString("cause");
+                        handler.handle(Future.failedFuture(cause));
                     } else {
-                        try {
-                            handler.handle(Future.succeededFuture(result.getString("uuid")));
-                        } catch (Throwable t) {
-                            handler.handle(Future.failedFuture(t));
-                        }
+                        handler.handle(Future.failedFuture(malformedReplyMessage));
+                    }
+                } else {
+                    try {
+                        final String uuid = result.getString("uuid");
+                        handler.handle(Future.succeededFuture(uuid));
+                    } catch (Throwable t) {
+                        handler.handle(Future.failedFuture(t));
                     }
                 }
             }
@@ -866,60 +760,34 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                 handler.handle(Future.failedFuture(reply.cause()));
             } else {
                 JsonObject obj = (JsonObject) reply.result().body();
-                if (Objects.isNull(obj)) {
-                    handler.handle(Future.failedFuture("Null reply message"));
-                } else {
-                    JsonObject result = obj.getJsonObject("result");
-                    if (Objects.isNull(result)) {
-                        handler.handle(Future.failedFuture("Malformed reply message"));
+                Objects.requireNonNull(obj);
+
+                final JsonObject result = obj.getJsonObject("result");
+                if (Objects.isNull(result)) {
+                    final JsonObject failure = obj.getJsonObject("failure");
+                    if (! Objects.isNull(failure)) {
+                        final String cause = failure.getString("cause");
+                        handler.handle(Future.failedFuture(cause));
                     } else {
-                        try {
-                            final List<JsonObject> jsonObjects =
-                                    result.getJsonArray("messages").getList();
+                        handler.handle(Future.failedFuture(malformedReplyMessage));
+                    }
+                } else {
+                    try {
+                        final List<JsonObject> jsonObjects =
+                                result.getJsonArray("messages").getList();
 
-                            final List<MessageMapper> messages =
-                                    jsonObjects
-                                            .stream()
-                                            .map(x -> x.mapTo(MessageMapper.class))
-                                            .collect(Collectors.toList());
+                        final List<MessageMapper> messages =
+                                jsonObjects
+                                        .stream()
+                                        .map(x -> x.mapTo(MessageMapper.class))
+                                        .collect(Collectors.toList());
 
-                            handler.handle(Future.succeededFuture(messages));
-                        } catch (Throwable t) {
-                            handler.handle(Future.failedFuture(t));
-                        }
+                        handler.handle(Future.succeededFuture(messages));
+                    } catch (Throwable t) {
+                        handler.handle(Future.failedFuture(t));
                     }
                 }
             }
         });
-    }
-
-    /*** Helpers ******************************************************************************************************/
-    private static String getSessionUserEmail(RoutingContext ctx) {
-        User User = ctx.user();
-        AccessToken at = (AccessToken) User;
-
-        JsonObject idToken = KeycloakHelper.idToken(at.principal());
-        String email = idToken.getString("email");
-
-        return email;
-    }
-
-    private static String buildBackLink(int index) {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("./");
-        for (int i = 0; i < index; ++ i)
-            sb.append("../");
-
-        return sb.toString();
-    }
-
-    private static String chopString(String s) {
-        return s.substring(0, s.length() -2);
-    }
-
-    private static Path protectedPath(RoutingContext ctx) {
-        Path prefix = Paths.get("/protected");
-        return prefix.relativize(Paths.get(urlDecode(ctx.request().path())));
     }
 }

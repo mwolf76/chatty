@@ -135,8 +135,9 @@ public class PresenceVerticle extends AbstractVerticle {
                                 prevFuture.compose(v -> {
                                     final JsonArray users = new JsonArray(userIDs);
                                     final String channel = "webchat.partakers." + roomID;
-                                    eventBus.publish(channel, new JsonObject().put("users", users));
-                                    logger.debug("{} <-- {}", channel, users.toString());
+
+                                    eventBus
+                                            .publish(channel, new JsonObject().put("users", users));
                                 }, initFuture);
 
                                 /* let's get this thing started ... */
@@ -155,7 +156,9 @@ public class PresenceVerticle extends AbstractVerticle {
                     logger.error(roomsAsyncResult.cause().toString());
                 } else {
                     final List<RoomMapper> rooms = roomsAsyncResult.result();
-                    eventBus.publish("webchat.rooms", new JsonObject().put("rooms", new JsonArray(rooms
+
+                    eventBus
+                            .publish("webchat.rooms", new JsonObject().put("rooms", new JsonArray(rooms
                             .stream().map(JsonObject::mapFrom).collect(Collectors.toList()))));
                 }
             });
@@ -191,28 +194,32 @@ public class PresenceVerticle extends AbstractVerticle {
                 handler.handle(Future.failedFuture(reply.cause()));
             } else {
                 JsonObject obj = (JsonObject) reply.result().body();
-                if (Objects.isNull(obj)) {
-                    handler.handle(Future.failedFuture("Empty reply message"));
-                } else {
-                    final JsonObject result = obj.getJsonObject("result");
-                    if (Objects.isNull(result)) {
-                        handler.handle(Future.failedFuture("Malformed reply message"));
-                    } else {
-                        try {
-                            final JsonArray jsonArray = result.getJsonArray("rooms");
-                            if (Objects.isNull(jsonArray)) {
-                                handler.handle(Future.failedFuture("Null rooms list"));
-                            } else {
-                                final List<JsonObject> list = jsonArray.getList();
-                                final List<RoomMapper> rooms = list.stream()
-                                        .map(x -> x.mapTo(RoomMapper.class))
-                                        .collect(Collectors.toList());
+                Objects.requireNonNull(obj);
 
-                                handler.handle(Future.succeededFuture(rooms));
-                            }
-                        } catch (ClassCastException cce) {
-                            handler.handle(Future.failedFuture(cce));
+                final JsonObject result = obj.getJsonObject("result");
+                if (Objects.isNull(result)) {
+                    final JsonObject failure = obj.getJsonObject("failure");
+                    if (! Objects.isNull(failure)) {
+                        final String cause = failure.getString("cause");
+                        handler.handle(Future.failedFuture(cause));
+                    } else {
+                        handler.handle(Future.failedFuture("Malformed reply message"));
+                    }
+                } else {
+                    try {
+                        final JsonArray jsonArray = result.getJsonArray("rooms");
+                        if (Objects.isNull(jsonArray)) {
+                            handler.handle(Future.failedFuture("Null rooms list"));
+                        } else {
+                            final List<JsonObject> list = jsonArray.getList();
+                            final List<RoomMapper> rooms = list.stream()
+                                    .map(x -> x.mapTo(RoomMapper.class))
+                                    .collect(Collectors.toList());
+
+                            handler.handle(Future.succeededFuture(rooms));
                         }
+                    } catch (ClassCastException cce) {
+                        handler.handle(Future.failedFuture(cce));
                     }
                 }
             }

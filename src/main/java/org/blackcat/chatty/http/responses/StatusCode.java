@@ -1,4 +1,4 @@
-package org.blackcat.chatty.http;
+package org.blackcat.chatty.http.responses;
 
 /**
  * Enum for HTTP status codes

@@ -108,6 +108,18 @@ public class DataStoreVerticle extends AbstractVerticle {
         });
     }
 
+    private JsonObject makeFailure(String cause) {
+        return new JsonObject()
+                .put("failure", new JsonObject()
+                        .put("cause", cause));
+    }
+
+    private JsonObject makeFailure(Throwable cause) {
+        return new JsonObject()
+                .put("failure", new JsonObject().put("cause",
+                        cause.toString()));
+    }
+
     private void setupQueryDispatch(Handler<AsyncResult<Void>> handler) {
         vertx.eventBus()
                 .consumer(ADDRESS, msg -> {
@@ -118,12 +130,16 @@ public class DataStoreVerticle extends AbstractVerticle {
                     switch(queryType) {
                         case FIND_CREATE_USER_BY_EMAIL:
                             findCreateUserByEmail(params, asyncResult -> {
-                                if (asyncResult.failed())
-                                    throw new RuntimeException(asyncResult.cause());
+                                JsonObject reply;
+                                if (asyncResult.failed()) {
+                                   reply = makeFailure(asyncResult.cause());
+                                } else {
+                                    final UserMapper user = asyncResult.result();
+                                    reply = new JsonObject().put("result",
+                                            Objects.isNull(user) ? null : JsonObject.mapFrom(user));
+                                }
 
-                                final UserMapper user = asyncResult.result();
-                                JsonObject reply = new JsonObject().put("result",
-                                        Objects.isNull(user) ? null : JsonObject.mapFrom(user));
+                                Objects.requireNonNull(reply);
                                 logger.debug("{}({}) := {}", FIND_CREATE_USER_BY_EMAIL, params, reply);
                                 msg.reply(reply);
                             });
@@ -131,12 +147,16 @@ public class DataStoreVerticle extends AbstractVerticle {
 
                         case FIND_CREATE_ROOM_BY_NAME:
                             findCreateRoomByName(params, asyncResult -> {
-                                if (asyncResult.failed())
-                                    throw new RuntimeException(asyncResult.cause());
+                                JsonObject reply;
+                                if (asyncResult.failed()) {
+                                    reply = makeFailure(asyncResult.cause());
+                                } else {
+                                    final RoomMapper room = asyncResult.result();
+                                    reply = new JsonObject().put("result",
+                                            Objects.isNull(room) ? null : JsonObject.mapFrom(room));
+                                }
 
-                                final RoomMapper room = asyncResult.result();
-                                JsonObject reply = new JsonObject().put("result",
-                                        Objects.isNull(room) ? null : JsonObject.mapFrom(room));
+                                Objects.requireNonNull(reply);
                                 logger.debug("{}({}) := {}", FIND_CREATE_ROOM_BY_NAME, params, reply);
                                 msg.reply(reply);
                             });
@@ -144,12 +164,16 @@ public class DataStoreVerticle extends AbstractVerticle {
 
                         case FIND_USER_BY_UUID:
                             findUserByUUID(params, asyncResult -> {
-                                if (asyncResult.failed())
-                                    throw new RuntimeException(asyncResult.cause());
+                                JsonObject reply;
+                                if (asyncResult.failed()) {
+                                    reply = makeFailure(asyncResult.cause());
+                                } else {
+                                    final UserMapper user = asyncResult.result();
+                                    reply = new JsonObject().put("result",
+                                            Objects.isNull(user) ? null : JsonObject.mapFrom(user));
+                                }
 
-                                final UserMapper user = asyncResult.result();
-                                JsonObject reply = new JsonObject().put("result",
-                                        Objects.isNull(user) ? null : JsonObject.mapFrom(user));
+                                Objects.requireNonNull(reply);
                                 logger.debug("{}({}) := {}", FIND_USER_BY_UUID, params, reply);
                                 msg.reply(reply);
                             });
@@ -157,40 +181,54 @@ public class DataStoreVerticle extends AbstractVerticle {
 
                         case FIND_ROOM_BY_UUID:
                             findRoomByUUID(params,  asyncResult -> {
-                                if (asyncResult.failed())
-                                    throw new RuntimeException(asyncResult.cause());
+                                JsonObject reply;
+                                if (asyncResult.failed()) {
+                                    reply = makeFailure(asyncResult.cause());
+                                } else {
+                                    final RoomMapper room = asyncResult.result();
+                                    reply = new JsonObject().put("result",
+                                            Objects.isNull(room) ? null : JsonObject.mapFrom(room));
+                                }
 
-                                final RoomMapper room = asyncResult.result();
-                                JsonObject reply = new JsonObject().put("result",
-                                        Objects.isNull(room) ? null : JsonObject.mapFrom(room));
+                                Objects.requireNonNull(reply);
                                 logger.debug("{}({}) := {}", FIND_ROOM_BY_UUID, params, reply);
                                 msg.reply(reply);
                             });
                             break;
 
                         case FIND_ROOMS:
+                            /* params unused here */
                             findRooms(params, asyncResult -> {
-                                if (asyncResult.failed())
-                                    throw new RuntimeException(asyncResult.cause());
+                                JsonObject reply;
+                                if (asyncResult.failed()) {
+                                    reply = makeFailure(asyncResult.cause());
+                                } else {
+                                    /* lists of objects need to be explicitly mapped to an array of of json objects */
+                                    final JsonArray rooms = new JsonArray(asyncResult.result()
+                                            .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
 
-                                /* lists of objects need to be explicitly mapped to an array of of json objects */
-                                final JsonArray rooms = new JsonArray(asyncResult.result()
-                                        .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
-                                JsonObject reply = new JsonObject().put("result",
-                                        new JsonObject().put("rooms", rooms));
-                                logger.debug("{}({}) := {}", FIND_ROOMS, params, reply);
+                                    reply = new JsonObject().put("result",
+                                            new JsonObject().put("rooms", rooms));
+                                }
+
+                                Objects.requireNonNull(reply);
+                                logger.debug("{}() := {}", FIND_ROOMS, reply);
                                 msg.reply(reply);
                             });
                             break;
 
                         case RECORD_MESSAGE:
                             recordMessage(params, asyncResult -> {
-                                if (asyncResult.failed())
-                                    throw new RuntimeException(asyncResult.cause());
+                                JsonObject reply;
+                                if (asyncResult.failed()) {
+                                    reply = makeFailure(asyncResult.cause());
+                                } else {
+                                    final MessageMapper message = asyncResult.result();
+                                    reply = new JsonObject().put("result",
+                                            Objects.isNull(message) ? null : JsonObject.mapFrom(message));
+                                }
 
-                                final MessageMapper message = asyncResult.result();
-                                JsonObject reply = new JsonObject().put("result",
-                                        Objects.isNull(message) ? null : JsonObject.mapFrom(message));
+                                Objects.requireNonNull(reply);
                                 logger.debug("{}({}) := {}", RECORD_MESSAGE, params, reply);
                                 msg.reply(reply);
                             });
@@ -198,24 +236,35 @@ public class DataStoreVerticle extends AbstractVerticle {
 
                         case FETCH_MESSAGES:
                             fetchMessages(params, asyncResult -> {
-                                if (asyncResult.failed())
-                                    throw new RuntimeException(asyncResult.cause());
-
+                                JsonObject reply;
+                                if (asyncResult.failed()) {
+                                    reply = makeFailure(asyncResult.cause());
+                                } else {
                                     /* lists of objects need to be explicitly mapped to a list of json objects */
-                                final JsonArray messages =  new JsonArray(asyncResult.result()
-                                        .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
+                                    final JsonArray messages = new JsonArray(asyncResult.result()
+                                            .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
 
-                                JsonObject reply = new JsonObject().put("result",
-                                        new JsonObject().put("messages", messages));
+                                    reply = new JsonObject().put("result",
+                                            new JsonObject().put("messages", messages));
+                                }
+
+                                Objects.requireNonNull(reply);
                                 logger.debug("{}({}) := {}", FETCH_MESSAGES, params, reply);
                                 msg.reply(reply);
                             });
                             break;
 
                         case GET_GENERAL_ROOM_UUID:
-                            JsonObject reply = new JsonObject()
-                                    .put("result", new JsonObject()
-                                            .put("uuid", this.generalRoomUUID));
+                            JsonObject reply;
+                            if (Objects.isNull(generalRoomUUID)) {
+                                reply = makeFailure("No room UUID available");
+                            } else {
+                                reply = new JsonObject()
+                                        .put("result", new JsonObject()
+                                                .put("uuid", this.generalRoomUUID));
+                            }
+
+                            Objects.requireNonNull(reply);
                             logger.debug("{} := {}", GET_GENERAL_ROOM_UUID, reply);
                             msg.reply(reply);
                             break;
