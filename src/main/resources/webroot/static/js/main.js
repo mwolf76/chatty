@@ -95,7 +95,12 @@ window.WebChat.Channel = (function() {
         }).then(function (body) {
             var $textarea = $('#room');
             body.data.history.forEach(function(msg, index, array) {
-                $textarea.append(msg);
+                var msgTimestamp = msg[0];
+                var msgAuthor = msg[1];
+                var msgText = msg[2];
+
+                var msgEntry = msgTimestamp + ' &lt;' + msgAuthor + '&gt; ' + msgText;
+                $textarea.append(msgEntry);
             });
             $textarea.scrollTop($textarea[0].scrollHeight);
             console.log( '' + body.data.history.length + " history messages loaded");
