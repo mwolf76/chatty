@@ -1,6 +1,5 @@
 package org.blackcat.chatty.verticles;
 
-import com.mitchellbosecke.pebble.PebbleEngine;
 import io.vertx.core.*;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.json.JsonArray;

@@ -1,17 +1,16 @@
 package org.blackcat.chatty.http;
 
+import com.google.common.base.Function;
+import com.google.common.base.Throwables;
 import io.vertx.core.*;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.http.HttpServerRequest;
-import io.vertx.core.http.HttpServerResponse;
-import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.ext.auth.User;
 import io.vertx.ext.auth.oauth2.AccessToken;
-import io.vertx.ext.auth.oauth2.KeycloakHelper;
 import io.vertx.ext.auth.oauth2.OAuth2Auth;
 import io.vertx.ext.auth.oauth2.providers.GoogleAuth;
 import io.vertx.ext.web.Router;
@@ -23,20 +22,28 @@ import io.vertx.ext.web.handler.sockjs.SockJSHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.templ.TemplateEngine;
 import org.blackcat.chatty.conf.Configuration;
-import org.blackcat.chatty.http.responses.*;
+import org.blackcat.chatty.http.responses.BaseResponse;
+import org.blackcat.chatty.http.responses.HtmlResponse;
+import org.blackcat.chatty.http.responses.JsonResponse;
+import org.blackcat.chatty.http.responses.TextResponse;
 import org.blackcat.chatty.mappers.MessageMapper;
 import org.blackcat.chatty.mappers.RoomMapper;
 import org.blackcat.chatty.mappers.UserMapper;
-import org.blackcat.chatty.util.HtmlEscape;
 import org.blackcat.chatty.util.Utils;
 import org.blackcat.chatty.verticles.DataStoreVerticle;
+import org.owasp.html.HtmlPolicyBuilder;
+import org.owasp.html.HtmlSanitizer;
+import org.owasp.html.HtmlStreamEventReceiver;
+import org.owasp.html.HtmlStreamRenderer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.MessageFormat;
 import java.time.Instant;
-import java.util.*;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static java.time.format.DateTimeFormatter.ISO_INSTANT;
@@ -48,6 +55,12 @@ public class RequestHandler implements Handler<HttpServerRequest> {
     private Router router;
     private TemplateEngine templateEngine;
     private Logger logger;
+
+    /** A policy definition that matches the minimal HTML that Slashdot allows. */
+    private static final Function<HtmlStreamEventReceiver, HtmlSanitizer.Policy>
+            POLICY_DEFINITION = new HtmlPolicyBuilder()
+            .allowStandardUrlProtocols()
+            .toFactory();
 
     public RequestHandler(final Vertx vertx, final TemplateEngine templateEngine,
                           final Logger logger, final Configuration configuration) {
@@ -89,6 +102,16 @@ public class RequestHandler implements Handler<HttpServerRequest> {
             String roomID = jsonObject.getString("roomID");
             String text = jsonObject.getString("text");
 
+            // sanitize the message
+            StringBuilder sanitizedTextStringBuilder = new StringBuilder();
+            HtmlStreamRenderer htmlStreamRenderer = HtmlStreamRenderer.create(sanitizedTextStringBuilder,
+                    e -> {
+                        Throwables.propagate(e);
+            },
+                    s -> {
+            });
+            HtmlSanitizer.sanitize(text, POLICY_DEFINITION.apply(htmlStreamRenderer));
+
             findUserByUUID(vertx, userID, userMapperAsyncResult -> {
                 if (userMapperAsyncResult.failed()) {
                     logger.error(userMapperAsyncResult.cause().toString());
@@ -101,7 +124,8 @@ public class RequestHandler implements Handler<HttpServerRequest> {
                         } else {
                             final RoomMapper room = roomMapperAsyncResult.result();
 
-                            recordMessage(vertx, user, text, Instant.now(), room, messageMapperAsyncResult -> {
+                            recordMessage(vertx, user, sanitizedTextStringBuilder.toString(),
+                                    Instant.now(), room, messageMapperAsyncResult -> {
                                 if (messageMapperAsyncResult.failed()) {
                                     logger.error(messageMapperAsyncResult.cause().toString());
                                 } else {
@@ -167,7 +191,8 @@ public class RequestHandler implements Handler<HttpServerRequest> {
         return MessageFormat.format("{0} &lt;{1}&gt;: {2}",
                 DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(
                         Date.from(Instant.from(ISO_INSTANT.parse(messageMapper.getTimeStamp())))),
-                messageMapper.getAuthor().getEmail(), HtmlEscape.escapeTextArea(messageMapper.getText()));
+                messageMapper.getAuthor().getEmail(),
+                messageMapper.getText());
     }
 
     private void setupRouter(final Vertx vertx, final Router router, final Configuration configuration) {

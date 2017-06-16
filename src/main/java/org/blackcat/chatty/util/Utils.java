@@ -9,7 +9,6 @@ import io.vertx.ext.web.RoutingContext;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
