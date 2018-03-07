@@ -1,0 +1,37 @@
+{% extends "base.peb" %}
+{% block title %}{{ roomName }}{% endblock %}
+
+{% block pagestyle %}
+<style src="text/css">
+  body {
+    text-align: center;
+  }
+
+  .wraptocenter {
+  text-align: left;
+  vertical-align: middle;
+  width: 80%;
+  margin: 4em auto;
+}
+.wraptocenter * {
+  vertical-align: middle;
+  width: 100%;
+  max-width: 360px;
+}
+</style>
+{% endblock %}
+
+{% block pagejs %}
+{% endblock %}
+
+{% block content %}
+<h4>Full Transcript</h4>
+<div class="wraptocenter">
+{% for message in messages %}
+<p>
+    <div><span>{{ message.timestamp }}</span>&nbsp;<span>{{ message.author.email }}</span></div>
+    <div>{{ message.text }}</div>
+</p>
+{% endfor %}
+</div>
+{% endblock %}

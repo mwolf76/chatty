@@ -59,7 +59,7 @@ public class DataStoreVerticle extends AbstractVerticle {
         vertx.executeBlocking(future -> {
 
             /* retrieve configuration object from vert.x ctx */
-            final Configuration configuration = new Configuration(vertx.getOrCreateContext().config());
+            Configuration configuration = new Configuration(vertx.getOrCreateContext().config());
 
             /* connect to mongodb data store */
             String connectionString = String.format("%s://%s:%s",
@@ -71,8 +71,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                     .put("connection_string", connectionString)
                     .put("db_name", configuration.getDatabaseName());
 
-            final DataStoreSettings dataStoreSettings =
-                    new DataStoreSettings();
+            DataStoreSettings dataStoreSettings = new DataStoreSettings();
 
             MongoClient mongoClient = MongoClient.createShared(vertx, mongodbConfig);
             mongoDataStore = new MongoDataStore(vertx, mongoClient, new JsonObject(), dataStoreSettings);
@@ -99,7 +98,7 @@ public class DataStoreVerticle extends AbstractVerticle {
             if (asyncResult.failed())
                 handler.handle(Future.failedFuture(asyncResult.cause()));
 
-            final RoomMapper room = asyncResult.result();
+            RoomMapper room = asyncResult.result();
 
             logger.info("General room is {}", room);
             generalRoomUUID = room.getUuid();
@@ -134,7 +133,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 if (asyncResult.failed()) {
                                    reply = makeFailure(asyncResult.cause());
                                 } else {
-                                    final UserMapper user = asyncResult.result();
+                                    UserMapper user = asyncResult.result();
                                     reply = new JsonObject().put("result",
                                             Objects.isNull(user) ? null : JsonObject.mapFrom(user));
                                 }
@@ -151,7 +150,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 if (asyncResult.failed()) {
                                     reply = makeFailure(asyncResult.cause());
                                 } else {
-                                    final RoomMapper room = asyncResult.result();
+                                    RoomMapper room = asyncResult.result();
                                     reply = new JsonObject().put("result",
                                             Objects.isNull(room) ? null : JsonObject.mapFrom(room));
                                 }
@@ -185,7 +184,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 if (asyncResult.failed()) {
                                     reply = makeFailure(asyncResult.cause());
                                 } else {
-                                    final RoomMapper room = asyncResult.result();
+                                    RoomMapper room = asyncResult.result();
                                     reply = new JsonObject().put("result",
                                             Objects.isNull(room) ? null : JsonObject.mapFrom(room));
                                 }
@@ -204,7 +203,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                     reply = makeFailure(asyncResult.cause());
                                 } else {
                                     /* lists of objects need to be explicitly mapped to an array of of json objects */
-                                    final JsonArray rooms = new JsonArray(asyncResult.result()
+                                    JsonArray rooms = new JsonArray(asyncResult.result()
                                             .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
 
                                     reply = new JsonObject().put("result",
@@ -223,7 +222,7 @@ public class DataStoreVerticle extends AbstractVerticle {
                                 if (asyncResult.failed()) {
                                     reply = makeFailure(asyncResult.cause());
                                 } else {
-                                    final MessageMapper message = asyncResult.result();
+                                    MessageMapper message = asyncResult.result();
                                     reply = new JsonObject().put("result",
                                             Objects.isNull(message) ? null : JsonObject.mapFrom(message));
                                 }
@@ -241,8 +240,11 @@ public class DataStoreVerticle extends AbstractVerticle {
                                     reply = makeFailure(asyncResult.cause());
                                 } else {
                                     /* lists of objects need to be explicitly mapped to a list of json objects */
-                                    final JsonArray messages = new JsonArray(asyncResult.result()
-                                            .stream().map(JsonObject::mapFrom).collect(Collectors.toList()));
+                                    JsonArray messages =
+                                        new JsonArray(asyncResult.result()
+                                                          .stream()
+                                                          .map(JsonObject::mapFrom)
+                                                          .collect(Collectors.toList()));
 
                                     reply = new JsonObject().put("result",
                                             new JsonObject().put("messages", messages));
@@ -289,7 +291,7 @@ public class DataStoreVerticle extends AbstractVerticle {
             if (asyncResult.failed()) {
                 handler.handle(Future.failedFuture(asyncResult.cause()));
             } else {
-                final UserMapper result = asyncResult.result();
+                UserMapper result = asyncResult.result();
                 if (result != null) {
                     handler.handle(Future.succeededFuture(result));
                 } else {
@@ -324,7 +326,7 @@ public class DataStoreVerticle extends AbstractVerticle {
             if (asyncResult.failed()) {
                 handler.handle(Future.failedFuture(asyncResult.cause()));
             } else {
-                final RoomMapper result = asyncResult.result();
+                RoomMapper result = asyncResult.result();
                 if (result != null) {
                     handler.handle(Future.succeededFuture(result));
                 } else {
@@ -389,12 +391,10 @@ public class DataStoreVerticle extends AbstractVerticle {
 
         IWrite<MessageMapper> write = mongoDataStore.createWrite(MessageMapper.class);
         write.add(messageMapper);
-
         write.save(result -> {
             if (result.failed()) {
                 handler.handle(Future.failedFuture(result.cause()));
             } else {
-                logger.info("Recorded new message: {}", messageMapper.toString());
                 handler.handle(Future.succeededFuture(messageMapper));
             }
         });
@@ -404,11 +404,10 @@ public class DataStoreVerticle extends AbstractVerticle {
         /* fetch params */
         String roomUUID = params.getString("roomUUID");
         findRoomByUUID(new JsonObject().put("uuid", roomUUID), asyncResult -> {
-
             if (asyncResult.failed()) {
                 handler.handle(Future.failedFuture(asyncResult.cause()));
             } else {
-                final RoomMapper room = asyncResult.result();
+                RoomMapper room = asyncResult.result();
                 IQuery<MessageMapper> query = mongoDataStore.createQuery(MessageMapper.class);
 
                 query.setSearchCondition(ISearchCondition.isEqual("room", room.getUuid()));

@@ -1,0 +1,3 @@
+{% extends "error.peb" %}
+{% block error %}Not Acceptable{% endblock %}
+{% block message %}The resource you required is not allowed in any of the formats supported by your request. Please check your URL and retry.{% endblock %}

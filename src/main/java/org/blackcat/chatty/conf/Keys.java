@@ -1,38 +1,47 @@
 package org.blackcat.chatty.conf;
 
-public class Keys {
+final public class Keys {
     /* SERVER */
-    static String SERVER_SECTION = "server";
+    public static final String SERVER_SECTION = "web";
 
-    static String SERVER_HTTP_PORT = "port";
-    static int DEFAULT_SERVER_HTTP_PORT = 8080;
+    public static final String SERVER_DOMAIN = "domain";
+    public static final String SERVER_HTTP_HOST = "host";
+    public static final String DEFAULT_SERVER_HTTP_HOST = "localhost";
 
-    static String SERVER_USE_SSL = "useSSL";
-    static boolean DEFAULT_SERVER_USE_SSL = false;
+    public static final String SERVER_HTTP_PORT = "port";
+    public static final int DEFAULT_SERVER_HTTP_PORT = 8080;
 
-    static String SERVER_KEYSTORE_FILENAME = "keystoreFilename";
-    static String DEFAULT_SERVER_KEYSTORE_FILENAME = "server-keystore.jks";
+    public static final String SERVER_USE_SSL = "useSSL";
+    public static final boolean DEFAULT_SERVER_USE_SSL = false;
 
-    static String SERVER_KEYSTORE_PASSWORD = "keystorePassword";
-    static String DEFAULT_SERVER_KEYSTORE_PASSWORD = "password";
+    public static final String SERVER_KEYSTORE_FILENAME = "keystoreFilename";
+    public static final String DEFAULT_SERVER_KEYSTORE_FILENAME = "server-keystore.jks";
 
-    static String SERVER_TIMEOUT = "timeout";
-    static int DEFAULT_SERVER_TIMEOUT = 30;
+    public static final String SERVER_KEYSTORE_PASSWORD = "keystorePassword";
+    public static final String DEFAULT_SERVER_KEYSTORE_PASSWORD = "password";
+
+    public static final String SERVER_START_TIMEOUT = "timeout";
+    public static final int DEFAULT_SERVER_START_TIMEOUT = 30;
+
+    /* STORAGE */
+    public static final String STORAGE_SECTION = "storage";
+    public static final String STORAGE_ROOT = "root";
+    public static final String DEFAULT_STORAGE_ROOT = "/var/lib/trunk";
 
     /* DATABASE */
-    static String DATABASE_SECTION = "database";
+    public static final String DATABASE_SECTION = "database";
 
-    static String DATABASE_TYPE = "type";
-    static String DATABASE_TYPE_MONGODB = "mongodb";
+    public static final String DATABASE_TYPE = "type";
+    public static final String DATABASE_TYPE_MONGODB = "mongodb";
 
-    static String DATABASE_HOST = "host";
-    static String DEFAULT_DATABASE_HOST = "locahost";
+    public static final String DATABASE_HOST = "host";
+    public static final String DEFAULT_DATABASE_HOST = "localhost";
 
-    static String DATABASE_PORT = "port";
-    static int DEFAULT_DATABASE_PORT = 27027;
+    public static final String DATABASE_PORT = "port";
+    public static final int DEFAULT_DATABASE_PORT = 27017;
 
-    static String DATABASE_NAME = "name";
-    static String DEFAULT_DATABASE_NAME = "data";
+    public static final String DATABASE_NAME = "name";
+    public static final String DEFAULT_DATABASE_NAME = "data";
 
     /* REDIS */
     static String REDIS_SECTION = "redis";
@@ -47,16 +56,24 @@ public class Keys {
     static int DEFAULT_REDIS_DATABASE_INDEX = 0;
 
     /* OAUTH2 */
-    static String OAUTH2_SECTION = "oauth2";
+    public static final String OAUTH2_SECTION = "oauth2";
 
-    static String OAUTH2_PROVIDER = "provider";
-    static String OAUTH2_PROVIDER_GOOGLE = "google";
-    // TODO: add more providers
+    public static final String OAUTH2_PROVIDER = "provider";
+    public static final String OAUTH2_PROVIDER_GOOGLE = "google";
+    public static final String OAUTH2_PROVIDER_KEYCLOAK = "keycloak";
+    public static final String OAUTH2_CLIENT_ID = "clientID";
+    public static final String OAUTH2_CLIENT_SECRET = "clientSecret";
 
-    static String OAUTH2_CLIENT_ID = "clientID";
-    static String OAUTH2_CLIENT_SECRET = "clientSecret";
+    /* reserved for keycloak oauth2 */
+    public static final String OAUTH2_KEYCLOAK_SECTION = "keycloak";
+    public static final String OAUTH2_KEYCLOAK_AUTH_SERVER_URL = "URL";
+    public static final String DEFAULT_OAUTH2_KEYCLOAK_AUTH_SERVER_URL = "http://localhost:9000/auth";
 
-    static String OAUTH2_DOMAIN = "domain";
+    public static final String OAUTH2_KEYCLOAK_AUTH_SERVER_REALM = "realm";
+    public static final String DEFAULT_KEYCLOAK_OAUTH2_AUTH_SERVER_REALM = "master";
+
+    public static final String OAUTH2_KEYCLOAK_AUTH_SERVER_PUBLIC_KEY = "realmPublicKey";
+    public static final String DEFAULT_KEYCLOAK_OAUTH2_AUTH_SERVER_PUBLIC_KEY = null;
 
     private Keys()
     {}

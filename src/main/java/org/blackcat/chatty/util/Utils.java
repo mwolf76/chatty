@@ -1,90 +1,106 @@
 package org.blackcat.chatty.util;
 
-import io.vertx.core.json.JsonObject;
-import io.vertx.ext.auth.User;
-import io.vertx.ext.auth.oauth2.AccessToken;
-import io.vertx.ext.auth.oauth2.KeycloakHelper;
+import io.vertx.core.json.JsonArray;
 import io.vertx.ext.web.RoutingContext;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final public class Utils {
 
-    final static Pattern emailPattern =
-            Pattern.compile("^[\\w!#$%&'*+/=?`{|}~^-]+(?:\\.[\\w!#$%&'*+/=?`{|}~^-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,6}$");
+    static final Pattern emailPattern =
+        Pattern.compile("^[\\w!#$%&'*+/=?`{|}~^-]+(?:\\.[\\w!#$%&'*+/=?`{|}~^-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,6}$");
+
+    static final int DISK_STORAGE_UNIT = 1024;
 
     private Utils()
     {}
 
-    public static String getSessionUserEmail(RoutingContext ctx) {
-        User User = ctx.user();
-        AccessToken at = (AccessToken) User;
-
-        JsonObject idToken = KeycloakHelper.idToken(at.principal());
-        String email = idToken.getString("email");
-
-        return email;
-    }
-
-    public static String humanReadableByteCount(long bytes, boolean si) {
-        int unit = si ? 1000 : 1024;
-        if (bytes < unit) return bytes + " B";
-        int exp = (int) (Math.log(bytes) / Math.log(unit));
-        String pre = (si ? "kMGTPE" : "KMGTPE").charAt(exp-1) + (si ? "" : "i");
-        return String.format("%.1f %sB", bytes / Math.pow(unit, exp), pre);
-    }
-
+    @NotNull
     public static String urlDecode(String path) {
-        String res;
-
+        Objects.requireNonNull(path);
         try {
-            res = URLDecoder.decode(path, "UTF-8");
+            return URLDecoder.decode(path, "UTF-8");
         } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
+            throw new UrlDecodingException(e);
         }
-
-        return res;
     }
 
+    @NotNull
     public static String urlEncode(String path) {
-        String res;
-
+        Objects.requireNonNull(path);
         try {
-            res = URLEncoder.encode(path, "UTF-8");
+            return URLEncoder.encode(path, "UTF-8");
         } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
+            throw new UrlEncodingException(e);
         }
-
-        return res;
     }
 
+    @NotNull
     public static String makeTempFileName(String nameStub) {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append(nameStub);
-        sb.append(".");
-        sb.append(UUID.randomUUID().toString());
-
-        return sb.toString();
+        Objects.requireNonNull(nameStub);
+        return nameStub + "." + UUID.randomUUID().toString();
     }
 
     public static boolean isValidEmail(String email) {
+        Objects.requireNonNull(email);
         return emailPattern.matcher(email).matches();
     }
 
-    public static boolean isValidUUID(String uuid) {
-        boolean res = true;
-
+    public static boolean isValidURL(String url) {
+        Objects.requireNonNull(url);
         try {
-            final UUID uuid1 = UUID.fromString(uuid);
-        } catch (IllegalArgumentException iae) {
-            res = false;
+            new URI(url).parseServerAuthority();
+            return true;
+        } catch (URISyntaxException e) {
+            return false;
         }
+    }
 
-        return res;
+    @NotNull
+    public static String chopString(String s) {
+        return s.substring(0, s.length() - 2);
+    }
+
+    public static Path protectedPath(RoutingContext ctx) {
+        Path prefix = Paths.get("/protected");
+        return prefix.relativize(Paths.get(urlDecode(ctx.request().path())));
+    }
+
+    @NotNull
+    public static <T> JsonArray listToJsonArray(List<T> list) {
+        JsonArray jsonArray = new JsonArray();
+        list.stream().forEach(jsonArray::add);
+        return jsonArray;
+    }
+
+    static class UrlEncodingException extends RuntimeException {
+        public UrlEncodingException(Throwable throwable) {
+            super(throwable);
+        }
+    }
+
+    static class UrlDecodingException extends RuntimeException {
+        public UrlDecodingException(Throwable throwable) {
+            super(throwable);
+        }
+    }
+
+    final static String uuidRegExp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+    public static boolean isValidUUID(String uuid) {
+        Pattern secretPattern = Pattern.compile(uuidRegExp);
+        Matcher matcher = secretPattern.matcher(uuid);
+        return matcher.matches();
     }
 }

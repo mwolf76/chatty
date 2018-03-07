@@ -89,4 +89,5 @@ $(document).ready(function() {
 </div>
 {% endblock %}
 
-{% block logout %}<div id="logout"><a href="/logout/"><span class="glyphicon glyphicon-log-out"></span></a></div>{% endblock %}
+{% block logout %}
+<div id="logout"><a href="/protected/logout/"><span class="glyphicon glyphicon-log-out"></span></a>{% endblock %}</div>

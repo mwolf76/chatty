@@ -11,15 +11,34 @@
     <properties>
         <slf4j.version>1.6.4</slf4j.version>
         <logback.version>1.0.1</logback.version>
+        <vertx.version>3.5.1</vertx.version>
+        <pebble.version>2.3.0</pebble.version>
+        <mapper.version>1.4.0-SNAPSHOT</mapper.version>
+        <jtar.version>2.3</jtar.version>
+        <junit.version>4.12</junit.version>
+        <selenium.version>3.8.1</selenium.version>
+        <html-sanitizer.version>20180219.1</html-sanitizer.version>
     </properties>
 
-    <!-- deps: junit, slf4j, logback, vert.x (core, web, unit) -->
     <dependencies>
-
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.12</version>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>${selenium.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-chrome-driver</artifactId>
+            <version>${selenium.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -44,70 +63,88 @@
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-unit</artifactId>
-            <version>3.4.1</version>
+            <version>${vertx.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-core</artifactId>
-            <version>3.4.1</version>
+            <version>${vertx.version}</version>
         </dependency>
 
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-config</artifactId>
-            <version>3.4.1</version>
+            <version>${vertx.version}</version>
         </dependency>
 
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-web</artifactId>
-            <version>3.4.1</version>
+            <version>${vertx.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-kafka-client</artifactId>
+            <version>${vertx.version}</version>
         </dependency>
 
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-web-templ-pebble</artifactId>
-            <version>3.4.1</version>
+            <version>${vertx.version}</version>
         </dependency>
         <dependency>
             <groupId>com.mitchellbosecke</groupId>
             <artifactId>pebble</artifactId>
-            <version>2.3.0</version>
+            <version>${pebble.version}</version>
         </dependency>
 
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-auth-common</artifactId>
-            <version>3.4.1</version>
+            <version>3.6.0-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-auth-oauth2</artifactId>
-            <version>3.4.1</version>
+            <version>3.6.0-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-redis-client</artifactId>
-            <version>3.4.1</version>
+            <version>${vertx.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-mongo-client</artifactId>
+            <version>${vertx.version}</version>
         </dependency>
 
         <dependency>
             <groupId>de.braintags</groupId>
             <artifactId>vertx-pojo-mapper-common</artifactId>
-            <version>1.4.0-SNAPSHOT</version>
+            <version>${mapper.version}</version>
         </dependency>
         <dependency>
             <groupId>de.braintags</groupId>
             <artifactId>vertx-pojongo</artifactId>
-            <version>1.4.0-SNAPSHOT</version>
+            <version>${mapper.version}</version>
         </dependency>
+
         <dependency>
             <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
             <artifactId>owasp-java-html-sanitizer</artifactId>
-            <version>20160628.1</version>
+            <version>${html-sanitizer.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>15.0</version>
         </dependency>
     </dependencies>
 
@@ -166,6 +203,4 @@
             </plugin>
         </plugins>
     </build>
-
-
 </project>
