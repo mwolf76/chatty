@@ -143,12 +143,9 @@ public final class MainHandlerImpl implements MainHandler {
 
             // sanitize the message
             StringBuilder sanitizedTextStringBuilder = new StringBuilder();
-            HtmlStreamRenderer htmlStreamRenderer = HtmlStreamRenderer.create(sanitizedTextStringBuilder,
-                e -> {
-                    Throwables.propagate(e);
-                },
-                    s -> {
-            });
+            HtmlStreamRenderer htmlStreamRenderer =
+                HtmlStreamRenderer.create(sanitizedTextStringBuilder, Throwables::propagate, s -> {});
+
             HtmlSanitizer.sanitize(text, POLICY_DEFINITION.apply(htmlStreamRenderer));
 
             Queries.findUserByUUID(vertx, userID, userMapperAsyncResult -> {

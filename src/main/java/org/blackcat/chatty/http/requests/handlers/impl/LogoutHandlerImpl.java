@@ -14,9 +14,7 @@ final public class LogoutHandlerImpl extends BaseUserRequestHandler implements U
     @Override
     public void handle(RoutingContext ctx) {
         super.handle(ctx);
-        checkHtmlRequest(ctx, ok -> {
-            accept(ctx);
-        });
+        checkHtmlRequest(ctx, this::accept);
     }
 
     private void accept(RoutingContext ctx) {

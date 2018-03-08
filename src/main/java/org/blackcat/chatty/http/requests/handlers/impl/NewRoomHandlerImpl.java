@@ -15,9 +15,7 @@ public class NewRoomHandlerImpl extends BaseUserRequestHandler implements NewRoo
     @Override
     public void handle(RoutingContext ctx) {
         super.handle(ctx);
-        checkJsonRequest(ctx, ok -> {
-            accept(ctx);
-        });
+        checkJsonRequest(ctx, this::accept);
     }
 
     private void accept(RoutingContext ctx) {

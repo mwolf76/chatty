@@ -12,9 +12,11 @@ final public class PublicIndexHandlerImpl extends BaseUserRequestHandler impleme
     @Override
     public void handle(RoutingContext ctx) {
         super.handle(ctx);
-        checkHtmlRequest(ctx, ok -> {
-            logger.debug("Serving public index page");
-            htmlResponseBuilder.success(ctx, "index");
-        });
+        checkHtmlRequest(ctx, this::accept);
+    }
+
+    private void accept(RoutingContext ctx) {
+        logger.debug("Serving public index page");
+        htmlResponseBuilder.success(ctx, "index");
     }
 }

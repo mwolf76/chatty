@@ -10,7 +10,7 @@ import org.blackcat.chatty.http.middleware.UserInfoHandler;
 
 final public class UserInfoHandlerImpl implements UserInfoHandler {
 
-    final private Logger logger = LoggerFactory.getLogger(UserInfoHandlerImpl.class);
+    final private Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @Override
     public void handle(RoutingContext ctx) {

@@ -29,9 +29,7 @@ public class HistoryHandlerImpl extends BaseUserRequestHandler implements Histor
     @Override
     public void handle(RoutingContext ctx) {
         super.handle(ctx);
-        checkJsonRequest(ctx, ok -> {
-            accept(ctx);
-        });
+        checkJsonRequest(ctx, this::accept);
     }
 
     private void accept(RoutingContext ctx) {
